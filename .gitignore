@@ -1,0 +1,11 @@
+*.bak
+*.bak.*
+*.log
+.env
+.env.*
+__pycache__/
+.pytest_cache/
+.venv/
+dist/
+build/
+node_modules/

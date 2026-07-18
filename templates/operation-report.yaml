@@ -1,0 +1,23 @@
+operation:
+  id: ""
+  timestamp: ""
+  agent: ""
+  version: ""
+
+discovery:
+  completed: false
+
+analysis:
+  completed: false
+
+backup:
+  completed: false
+
+execution:
+  changed_files: []
+
+verification:
+  passed: false
+
+rollback:
+  required: false

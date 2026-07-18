@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-ops-standard.org/schemas/operation-report.schema.json",
+  "title": "AI-OPS Operation Report",
+  "type": "object",
+  "required": [
+    "operation",
+    "discovery",
+    "analysis",
+    "backup",
+    "execution",
+    "verification",
+    "rollback"
+  ],
+  "properties": {
+    "operation": {
+      "type": "object",
+      "required": [
+        "id",
+        "timestamp",
+        "agent",
+        "version"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "agent": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      }
+    },
+    "discovery": {
+      "type": "object",
+      "required": [
+        "completed"
+      ],
+      "properties": {
+        "completed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "analysis": {
+      "type": "object",
+      "required": [
+        "completed"
+      ],
+      "properties": {
+        "completed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "backup": {
+      "type": "object",
+      "required": [
+        "completed"
+      ],
+      "properties": {
+        "completed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "properties": {
+        "changed_files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "required": [
+        "passed"
+      ],
+      "properties": {
+        "passed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "rollback": {
+      "type": "object",
+      "required": [
+        "required"
+      ],
+      "properties": {
+        "required": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}
