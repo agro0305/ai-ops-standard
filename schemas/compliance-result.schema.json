@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-ops-standard.org/schemas/compliance-result.schema.json",
+  "title": "AI-OPS Compliance Result",
+  "type": "object",
+  "required": ["profile", "implementation", "environment", "tested_at", "results", "overall_status"],
+  "properties": {
+    "profile": {"type": "string"},
+    "implementation": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": {"type": "string"},
+        "version": {"type": "string"}
+      }
+    },
+    "environment": {"type": "object", "additionalProperties": true},
+    "tested_at": {"type": "string", "format": "date-time"},
+    "overall_status": {"enum": ["pass", "fail", "inconclusive"]},
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["requirement_id", "status"],
+        "properties": {
+          "requirement_id": {"type": "string", "pattern": "^AIS-[0-9]{4}-REQ-[0-9]{3}$"},
+          "status": {"enum": ["pass", "fail", "not_applicable", "not_tested", "inconclusive"]},
+          "test_id": {"type": ["string", "null"]},
+          "evidence": {"type": "array", "items": {"type": "string"}},
+          "remediation": {"type": ["string", "null"]}
+        }
+      }
+    }
+  }
+}
