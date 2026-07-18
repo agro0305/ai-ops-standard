@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-ops-standard.org/schemas/agent-capability.schema.json",
+  "title": "AI-OPS Agent Capability Record",
+  "type": "object",
+  "required": ["id", "product", "version", "observed_at", "capabilities"],
+  "properties": {
+    "id": {"type": "string", "minLength": 1},
+    "product": {"type": "string"},
+    "executable": {"type": ["string", "null"]},
+    "version": {"type": "string"},
+    "installation_method": {"type": ["string", "null"]},
+    "update_policy": {"type": ["string", "null"]},
+    "models": {"type": "array", "items": {"type": "string"}},
+    "model_gateways": {"type": "array", "items": {"type": "string"}},
+    "mcp_servers": {"type": "array", "items": {"type": "string"}},
+    "capabilities": {
+      "type": "object",
+      "properties": {
+        "shell": {"type": "boolean"},
+        "filesystem_read": {"type": "boolean"},
+        "filesystem_write": {"type": "boolean"},
+        "network": {"type": "boolean"},
+        "git_read": {"type": "boolean"},
+        "git_write": {"type": "boolean"},
+        "unattended": {"type": "boolean"},
+        "destructive": {"type": "boolean"}
+      },
+      "additionalProperties": true
+    },
+    "permissions": {"type": "object", "additionalProperties": true},
+    "sandbox": {"type": ["object", "null"], "additionalProperties": true},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "source": {"type": ["string", "null"]},
+    "confidence": {"enum": ["high", "medium", "low", "unknown"]}
+  },
+  "additionalProperties": false
+}
