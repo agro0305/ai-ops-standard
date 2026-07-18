@@ -20,5 +20,22 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install test runner
+        run: python -m pip install --disable-pip-version-check pytest
+
       - name: Validate specifications and schemas
         run: python scripts/validate_repository.py
+
+      - name: Compile Python sources
+        run: python -m compileall -q implementations scripts compliance/tests
+
+      - name: Test discovery implementation
+        run: python -m pytest -q compliance/tests/test_discovery.py
+
+      - name: Smoke-test discovery CLI
+        run: |
+          python implementations/discovery/aiops_discovery.py \
+            --collect development \
+            --compact \
+            --output /tmp/discovery-report.json
+          python -m json.tool /tmp/discovery-report.json >/dev/null
