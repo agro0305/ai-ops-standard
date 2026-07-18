@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-ops-standard.org/schemas/discovery-report.schema.json",
+  "title": "AI-OPS Discovery Report",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "report_id",
+    "generated_at",
+    "generator",
+    "mode",
+    "effective_user",
+    "collectors",
+    "errors"
+  ],
+  "properties": {
+    "schema_version": {"type": "string"},
+    "report_id": {"type": "string", "format": "uuid"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "generator": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": {"const": "aiops-discovery"},
+        "version": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "mode": {"const": "read_only"},
+    "effective_user": {
+      "type": "object",
+      "required": ["uid", "gid"],
+      "properties": {
+        "uid": {"type": "integer"},
+        "gid": {"type": "integer"},
+        "name": {"type": ["string", "null"]}
+      },
+      "additionalProperties": false
+    },
+    "collectors": {
+      "type": "object",
+      "properties": {
+        "system": {"type": "object"},
+        "network": {"type": "object"},
+        "services": {"type": "object"},
+        "containers": {"type": "object"},
+        "development": {"type": "object"},
+        "ai": {"type": "object"},
+        "platform": {"type": "object"}
+      },
+      "additionalProperties": false
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["collector", "error"],
+        "properties": {
+          "collector": {"type": "string"},
+          "error": {"type": "string"},
+          "message": {"type": "string"}
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}
