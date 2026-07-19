@@ -15,9 +15,25 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 SUPPORTED_ACTIONS = {"mkdir", "write_file", "copy_file", "delete", "command"}
 PLAN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+PROTECTED_EXACT_TARGETS = {
+    "/",
+    "/boot",
+    "/dev",
+    "/etc",
+    "/home",
+    "/opt",
+    "/proc",
+    "/root",
+    "/run",
+    "/sys",
+    "/tmp",
+    "/usr",
+    "/var",
+    "/var/lib",
+}
 
 
 def now() -> str:
@@ -83,14 +99,28 @@ def snapshot_type(path: Path) -> str:
 def tree_digest(root: Path) -> str:
     digest = hashlib.sha256()
     digest.update(b"directory\0")
-    for path in sorted(root.rglob("*"), key=lambda item: item.relative_to(root).as_posix()):
+    for path in sorted(
+        root.rglob("*"), key=lambda item: item.relative_to(root).as_posix()
+    ):
         relative = path.relative_to(root).as_posix().encode("utf-8")
         if path.is_symlink():
-            digest.update(b"L\0" + relative + b"\0" + os.readlink(path).encode("utf-8") + b"\0")
+            digest.update(
+                b"L\0"
+                + relative
+                + b"\0"
+                + os.readlink(path).encode("utf-8")
+                + b"\0"
+            )
         elif path.is_dir():
             digest.update(b"D\0" + relative + b"\0")
         elif path.is_file():
-            digest.update(b"F\0" + relative + b"\0" + sha256(path).encode("ascii") + b"\0")
+            digest.update(
+                b"F\0"
+                + relative
+                + b"\0"
+                + sha256(path).encode("ascii")
+                + b"\0"
+            )
         else:
             raise ValueError(f"unsupported object inside directory: {path}")
     return digest.hexdigest()
@@ -151,6 +181,13 @@ def normalize_path(value: Any) -> str:
     return str(Path(value).expanduser().resolve(strict=False))
 
 
+def normalize_target_path(value: Any) -> str:
+    normalized = normalize_path(value)
+    if normalized in PROTECTED_EXACT_TARGETS:
+        raise ValueError(f"operation target is a protected system root: {normalized}")
+    return normalized
+
+
 def normalize_action(action: Any) -> dict[str, Any]:
     if not isinstance(action, dict):
         raise ValueError("every action must be an object")
@@ -173,10 +210,12 @@ def normalize_action(action: Any) -> dict[str, Any]:
         backup_targets = normalized.get("backup_targets", [])
         if not isinstance(backup_targets, list):
             raise ValueError("command backup_targets must be an array")
-        normalized["backup_targets"] = [normalize_path(item) for item in backup_targets]
+        normalized["backup_targets"] = [
+            normalize_target_path(item) for item in backup_targets
+        ]
         return normalized
 
-    normalized["path"] = normalize_path(normalized.get("path"))
+    normalized["path"] = normalize_target_path(normalized.get("path"))
     if kind == "write_file":
         if "content" in normalized and "content_from" in normalized:
             raise ValueError("write_file accepts content or content_from, not both")
@@ -224,7 +263,11 @@ def classify_risk(actions: list[dict[str, Any]]) -> str:
     level = 1
     for action in actions:
         kind = action.get("type")
-        targets = action.get("backup_targets", []) if kind == "command" else [action.get("path", "")]
+        targets = (
+            action.get("backup_targets", [])
+            if kind == "command"
+            else [action.get("path", "")]
+        )
         if kind in {"delete", "command"}:
             level = max(level, 3)
         if any(
@@ -264,7 +307,9 @@ def make_plan(args: argparse.Namespace) -> int:
     preconditions = [
         normalize_check(check) for check in request.get("preconditions", [])
     ]
-    verification = [normalize_check(check) for check in request.get("verification", [])]
+    verification = [
+        normalize_check(check) for check in request.get("verification", [])
+    ]
     risk = classify_risk(actions)
     approval_required = risk in {"high", "critical"}
     targets = action_targets(actions)
@@ -305,6 +350,11 @@ def make_backup(args: argparse.Namespace) -> int:
     actions = validate_plan(plan)
     plan_id = validate_plan_id(plan["plan_id"])
     root = Path(args.backup_root).expanduser().resolve() / plan_id
+    targets = action_targets(actions)
+    for raw in targets:
+        source = Path(raw)
+        if root == source or source in root.parents:
+            raise ValueError(f"backup root is inside operation target: {source}")
     if root.exists() and any(root.iterdir()):
         if not args.replace:
             raise FileExistsError(
@@ -315,7 +365,6 @@ def make_backup(args: argparse.Namespace) -> int:
 
     entries: list[dict[str, Any]] = []
     errors: list[str] = []
-    targets = action_targets(actions)
     for index, raw in enumerate(targets):
         source = Path(raw)
         existed = path_exists(source)
@@ -350,7 +399,9 @@ def make_backup(args: argparse.Namespace) -> int:
             errors.append(f"{source}: {exc}")
         entries.append(entry)
 
-    complete = not errors and all(entry["status"] == "completed" for entry in entries)
+    complete = not errors and all(
+        entry["status"] == "completed" for entry in entries
+    )
     manifest = {
         "schema_version": "1.1",
         "plan_id": plan_id,
@@ -387,14 +438,20 @@ def validate_manifest(
     entries = manifest.get("entries", [])
     if not isinstance(entries, list):
         raise PermissionError("backup manifest entries must be an array")
-    sources = [str(entry.get("source")) for entry in entries if isinstance(entry, dict)]
+    sources = [
+        str(entry.get("source")) for entry in entries if isinstance(entry, dict)
+    ]
     if len(sources) != len(set(sources)) or sorted(sources) != expected_targets:
-        raise PermissionError("backup manifest entries do not exactly match plan targets")
+        raise PermissionError(
+            "backup manifest entries do not exactly match plan targets"
+        )
 
     verified = 0
     for entry in entries:
         if entry.get("status") != "completed":
-            raise PermissionError(f"backup entry is not complete: {entry.get('source')}")
+            raise PermissionError(
+                f"backup entry is not complete: {entry.get('source')}"
+            )
         if entry.get("existed"):
             backup = Path(str(entry.get("backup", "")))
             if not path_exists(backup):
@@ -418,7 +475,9 @@ def evaluate_check(
             "check": check,
             "type": "manual",
             "passed": bool(manual_confirmed),
-            "error": None if manual_confirmed else "manual precondition not confirmed",
+            "error": None
+            if manual_confirmed
+            else "manual precondition not confirmed",
         }
 
     kind = check.get("type")
@@ -433,9 +492,9 @@ def evaluate_check(
             candidate = path if path.exists() else path.parent
             result["passed"] = candidate.exists() and os.access(candidate, os.W_OK)
         elif kind == "file_contains":
-            result["passed"] = str(check["text"]) in Path(check["path"]).read_text(
-                encoding="utf-8"
-            )
+            result["passed"] = str(check["text"]) in Path(
+                check["path"]
+            ).read_text(encoding="utf-8")
         elif kind == "sha256":
             result["actual"] = sha256(Path(check["path"]))
             result["passed"] = result["actual"] == check["expected"]
@@ -489,7 +548,8 @@ def action_descriptor(action: dict[str, Any], index: int) -> dict[str, Any]:
 def execute(args: argparse.Namespace) -> int:
     plan = load(args.plan)
     actions = validate_plan(plan)
-    check_approval(plan, args)
+    if args.apply:
+        check_approval(plan, args)
     report: dict[str, Any] = {
         "schema_version": "1.1",
         "plan_id": plan["plan_id"],
@@ -683,7 +743,9 @@ def rollback(args: argparse.Namespace) -> int:
                     copy_snapshot(backup, source)
                     actual = snapshot_digest(source)
                     if actual != entry.get("source_digest"):
-                        raise RuntimeError("restored object digest does not match backup source")
+                        raise RuntimeError(
+                            "restored object digest does not match backup source"
+                        )
                 elif path_exists(source):
                     raise RuntimeError("new target still exists after rollback")
                 result["status"] = "restored"
@@ -723,7 +785,8 @@ def rollback(args: argparse.Namespace) -> int:
                     )
                     if completed.returncode != 0:
                         raise RuntimeError(
-                            f"rollback command failed with return code {completed.returncode}"
+                            "rollback command failed with return code "
+                            f"{completed.returncode}"
                         )
                     result["status"] = "completed"
             except Exception as exc:
