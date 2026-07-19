@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-ops-standard.org/schemas/refresh-status.schema.json",
+  "title": "AI-OPS Report Refresh Status",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "generated_at",
+    "success",
+    "project_root",
+    "output_dir",
+    "reports",
+    "steps"
+  ],
+  "properties": {
+    "schema_version": {"type": "string"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "started_at": {"type": "string", "format": "date-time"},
+    "success": {"type": "boolean"},
+    "duration_seconds": {"type": "number", "minimum": 0},
+    "project_root": {"type": "string"},
+    "output_dir": {"type": "string"},
+    "reports": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {"type": "string"},
+          "argv": {"type": "array", "items": {"type": "string"}},
+          "returncode": {"type": "integer"},
+          "accepted": {"type": "boolean"},
+          "duration_seconds": {"type": "number", "minimum": 0},
+          "stdout": {"type": "string"},
+          "stderr": {"type": "string"},
+          "error": {"type": "string"}
+        },
+        "additionalProperties": true
+      }
+    },
+    "error": {"type": "string"},
+    "audit": {
+      "type": "object",
+      "required": ["written", "path"],
+      "properties": {
+        "written": {"type": "boolean"},
+        "path": {"type": "string"},
+        "error": {"type": "string"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
