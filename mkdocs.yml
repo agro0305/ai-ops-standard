@@ -1,0 +1,25 @@
+site_name: AI-OPS Standard
+site_description: Safe, repeatable and auditable AI operations
+site_url: https://agro0305.github.io/ai-ops-standard/
+repo_url: https://github.com/agro0305/ai-ops-standard
+repo_name: agro0305/ai-ops-standard
+edit_uri: edit/main/docs/
+strict: true
+
+theme:
+  name: readthedocs
+  highlightjs: true
+
+nav:
+  - Home: index.md
+  - Standard: standard.md
+  - Installation: INSTALLATION.md
+  - Community: community.md
+  - Releases:
+      - 0.2.0: releases/0.2.0.md
+
+markdown_extensions:
+  - tables
+  - fenced_code
+  - toc:
+      permalink: true
