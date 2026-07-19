@@ -4,15 +4,23 @@ The dashboard is a local-first, read-only-by-default view of AI-OPS inventory, o
 
 ## Current reference implementation
 
-The current server indexes JSON reports and provides:
+The current dashboard provides:
 
-- `/` — report index;
-- `/api/reports` — machine-readable report contents;
-- `/healthz` — minimal unauthenticated health response;
-- automatic free-port selection for foreground use;
+- an operational overview with report and compliance counters;
+- automatic classification of discovery, capability, compliance, plan, backup, execution, verification and rollback reports;
+- filtering and search by report type, file name and plan metadata;
+- safe opening and copying of individual JSON reports;
+- recursive discovery of nested backup manifests;
+- `/api/summary` — dashboard aggregate status;
+- `/api/reports` — report metadata without full payloads;
+- `/api/reports/<name>` — one validated report;
+- `/healthz` — minimal liveness response;
+- `/readyz` — data-directory readiness response;
 - Local, LAN and Tailscale URL discovery;
 - optional Basic, Bearer and header-token authentication;
 - a safe systemd installer.
+
+Reports larger than 10 MiB are not opened by the reference UI. Symlinked reports, path traversal and files outside the configured data directory are rejected.
 
 ## Foreground use
 
@@ -61,12 +69,17 @@ or:
 X-AI-OPS-Token: <token>
 ```
 
-The `/healthz` endpoint remains unauthenticated and returns no report contents.
+The `/healthz` and `/readyz` endpoints remain unauthenticated and return no report contents.
 
-Example API request:
+Example API requests:
 
 ```bash
-curl -H "Authorization: Bearer $(cat ~/.aiops-dashboard.token)" \
+TOKEN="$(cat ~/.aiops-dashboard.token)"
+
+curl -H "Authorization: Bearer $TOKEN" \
+  http://127.0.0.1:8789/api/summary
+
+curl -H "Authorization: Bearer $TOKEN" \
   http://127.0.0.1:8789/api/reports
 ```
 
@@ -96,6 +109,13 @@ The installer:
 - uses strict-port mode so the service address remains stable;
 - preserves an existing non-empty token file.
 
+After updating the repository, restart the service so it loads the new Python and static files:
+
+```bash
+sudo systemctl restart aiops-dashboard
+systemctl status aiops-dashboard --no-pager
+```
+
 Status and logs:
 
 ```bash
@@ -119,24 +139,27 @@ sudo systemctl daemon-reload
 
 The token and backups are not deleted automatically.
 
-## Required future views
+## Data model
 
-- Overview
-- System Inventory
-- AI Capability Registry
-- MCP Registry
-- Operations
-- Backups
-- Verification
-- Rollback
-- Compliance
-- Alerts and Audit
+The dashboard recognizes reports produced by the reference tools:
+
+- `discovery-report.json`;
+- `ai-capability-registry.json`;
+- `compliance-result.json`;
+- `operation-plan.json`;
+- `execution-report.json`;
+- `verification-report.json`;
+- `rollback-report.json`;
+- `.aiops-backups/*/backup-manifest.json`.
+
+Unknown JSON files remain visible under the `other` category.
 
 ## Deployment principles
 
 - Operates on localhost, LAN and Tailscale.
 - Does not require public internet exposure.
-- Uses authenticated backend APIs for control operations.
+- Uses authenticated backend APIs for report access.
 - Never treats UI state as source of truth.
-- Redacts secrets and sensitive payloads.
+- Redacts secrets before reports reach the dashboard.
 - Keeps state-changing operations outside the current read-only server.
+- Adds CSP, anti-framing, no-cache and MIME-sniffing protection headers.
