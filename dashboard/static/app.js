@@ -1,9 +1,10 @@
-const state = { reports: [], filtered: [], selected: null };
+const state = { reports: [], filtered: [], alerts: [], selected: null };
 
 const elements = {
   kpis: document.querySelector("#kpi-grid"),
   reportRoot: document.querySelector("#report-root"),
   reportList: document.querySelector("#report-list"),
+  alertList: document.querySelector("#alert-list"),
   category: document.querySelector("#category-filter"),
   search: document.querySelector("#search-input"),
   refresh: document.querySelector("#refresh-button"),
@@ -29,10 +30,20 @@ function formatDate(value) {
   const date = new Date(value);
   return Number.isNaN(date.valueOf()) ? text(value) : date.toLocaleString();
 }
+function formatAge(seconds) {
+  const value = Number(seconds || 0);
+  if (value < 60) return `${value}s`;
+  if (value < 3600) return `${Math.floor(value / 60)}min`;
+  return `${Math.floor(value / 3600)}h ${Math.floor((value % 3600) / 60)}min`;
+}
 
 function statusFor(report) {
   const summary = report.summary || {};
   if (report.error) return ["Greška", "bad"];
+  if (report.stale) return ["STALE", "warn"];
+  if (report.category === "refresh") {
+    return summary.success === false ? ["FAIL", "bad"] : ["FRESH", "good"];
+  }
   if (report.category === "compliance") {
     return Number(summary.failed || 0) === 0 ? ["PASS", "good"] : ["FAIL", "bad"];
   }
@@ -68,11 +79,42 @@ function kpi(label, value) {
 function renderSummary(summary) {
   elements.kpis.replaceChildren(
     kpi("Izveštaji", summary.report_count),
-    kpi("Neispravni JSON", summary.invalid_reports),
+    kpi("Stale", summary.stale_reports || 0),
+    kpi("Upozorenja", summary.alerts?.total || 0),
     kpi("Compliance PASS", summary.compliance?.passed || 0),
     kpi("Compliance FAIL", summary.compliance?.failed || 0),
   );
   elements.reportRoot.textContent = summary.root || "";
+}
+
+function renderAlerts(alerts) {
+  elements.alertList.replaceChildren();
+  if (!alerts.length) {
+    const empty = document.createElement("div");
+    empty.className = "alert-empty";
+    empty.textContent = "Nema aktivnih upozorenja.";
+    elements.alertList.append(empty);
+    return;
+  }
+  for (const alert of alerts) {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = `alert-row ${alert.severity}`;
+    row.addEventListener("click", () => openReport(alert.report));
+
+    const badge = document.createElement("span");
+    badge.className = `badge ${alert.severity === "critical" ? "bad" : "warn"}`;
+    badge.textContent = alert.severity.toUpperCase();
+
+    const content = document.createElement("div");
+    const message = document.createElement("strong");
+    message.textContent = alert.message;
+    const report = document.createElement("span");
+    report.textContent = alert.report;
+    content.append(message, report);
+    row.append(badge, content);
+    elements.alertList.append(row);
+  }
 }
 
 function populateCategories() {
@@ -86,7 +128,12 @@ function populateCategories() {
 }
 
 function searchableText(report) {
-  return JSON.stringify({ name: report.name, category: report.category, summary: report.summary }).toLowerCase();
+  return JSON.stringify({
+    name: report.name,
+    category: report.category,
+    summary: report.summary,
+    stale: report.stale,
+  }).toLowerCase();
 }
 
 function applyFilters() {
@@ -121,7 +168,7 @@ function renderReportList() {
     name.textContent = report.name;
     const meta = document.createElement("div");
     meta.className = "report-meta";
-    meta.textContent = `${formatBytes(report.size)} · ${formatDate(report.modified_at)}`;
+    meta.textContent = `${formatBytes(report.size)} · ${formatDate(report.modified_at)} · starost ${formatAge(report.age_seconds)}`;
     left.append(name, meta);
 
     const right = document.createElement("div");
@@ -142,7 +189,13 @@ function renderDetail(report) {
   elements.detailCategory.textContent = report.category;
   elements.detailName.textContent = report.name;
   elements.detailSummary.replaceChildren();
-  const values = { ...(report.summary || {}), size: formatBytes(report.size), modified_at: formatDate(report.modified_at) };
+  const values = {
+    ...(report.summary || {}),
+    stale: report.stale,
+    age: formatAge(report.age_seconds),
+    size: formatBytes(report.size),
+    modified_at: formatDate(report.modified_at),
+  };
   for (const [key, value] of Object.entries(values)) {
     const item = document.createElement("div");
     item.className = "summary-item";
@@ -170,7 +223,10 @@ async function openReport(name) {
   loadingText.textContent = "Čitanje izveštaja…";
   elements.detailEmpty.append(loadingTitle, loadingText);
   try {
-    const response = await fetch(`/api/reports/${encodeURIComponent(name)}`, { headers: { Accept: "application/json" }, cache: "no-store" });
+    const response = await fetch(`/api/reports/${encodeURIComponent(name)}`, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
     const payload = await response.json();
     if (!response.ok && !payload.data) throw new Error(payload.error || `HTTP ${response.status}`);
     renderDetail(payload);
@@ -194,18 +250,35 @@ async function refresh() {
   loading.textContent = "Učitavanje izveštaja…";
   elements.reportList.append(loading);
   try {
-    const [summaryResponse, reportsResponse] = await Promise.all([
+    const [summaryResponse, reportsResponse, alertsResponse] = await Promise.all([
       fetch("/api/summary", { cache: "no-store" }),
       fetch("/api/reports", { cache: "no-store" }),
+      fetch("/api/alerts", { cache: "no-store" }),
     ]);
-    if (!summaryResponse.ok || !reportsResponse.ok) throw new Error(`HTTP ${summaryResponse.status}/${reportsResponse.status}`);
-    const [summary, reports] = await Promise.all([summaryResponse.json(), reportsResponse.json()]);
+    if (!summaryResponse.ok || !reportsResponse.ok || !alertsResponse.ok) {
+      throw new Error(`HTTP ${summaryResponse.status}/${reportsResponse.status}/${alertsResponse.status}`);
+    }
+    const [summary, reports, alerts] = await Promise.all([
+      summaryResponse.json(), reportsResponse.json(), alertsResponse.json(),
+    ]);
     state.reports = reports;
+    state.alerts = alerts;
     renderSummary(summary);
+    renderAlerts(alerts);
     populateCategories();
     applyFilters();
-    elements.connection.textContent = "Povezano";
-    elements.connection.className = "status-pill good";
+
+    const critical = alerts.filter((item) => item.severity === "critical").length;
+    if (critical) {
+      elements.connection.textContent = `${critical} kritično`;
+      elements.connection.className = "status-pill bad";
+    } else if (alerts.length) {
+      elements.connection.textContent = `${alerts.length} upozorenja`;
+      elements.connection.className = "status-pill warn";
+    } else {
+      elements.connection.textContent = "Povezano";
+      elements.connection.className = "status-pill good";
+    }
   } catch (error) {
     elements.connection.textContent = "Greška";
     elements.connection.className = "status-pill bad";
@@ -231,3 +304,4 @@ elements.copy.addEventListener("click", async () => {
 });
 
 refresh();
+setInterval(refresh, 60_000);
