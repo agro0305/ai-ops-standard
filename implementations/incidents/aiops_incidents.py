@@ -9,7 +9,6 @@ import json
 import os
 import sys
 import tempfile
-import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -22,7 +21,7 @@ if str(DASHBOARD_DIR) not in sys.path:
 
 from report_store import ReportStore  # noqa: E402
 
-STATE_RELATIVE = Path(".aiops-incidents/state.json")
+STATE_RELATIVE = Path(".aiops-incidents/state.json.private")
 LOCK_RELATIVE = Path(".aiops-incidents/incidents.lock")
 STATUS_RELATIVE = Path("incident-status.json")
 AUDIT_RELATIVE = Path(".aiops-audit/events.jsonl")
@@ -63,25 +62,20 @@ def write_json_atomic(path: Path, payload: dict[str, Any], mode: int = 0o640) ->
 def append_audit_event(root: Path, event: dict[str, Any]) -> None:
     path = root / AUDIT_RELATIVE
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a+", encoding="utf-8") as stream:
-        fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
-        stream.seek(0, os.SEEK_END)
-        if stream.tell() >= MAX_AUDIT_BYTES:
-            stream.close()
+    lock_path = path.parent / "events.lock"
+    with lock_path.open("a+", encoding="utf-8") as lock_stream:
+        fcntl.flock(lock_stream.fileno(), fcntl.LOCK_EX)
+        if path.exists() and path.stat().st_size >= MAX_AUDIT_BYTES:
             rotated = path.with_suffix(path.suffix + ".1")
             if rotated.exists():
                 rotated.unlink()
             os.replace(path, rotated)
-            with path.open("a", encoding="utf-8") as replacement:
-                replacement.write(json.dumps(event, sort_keys=True, ensure_ascii=False) + "\n")
-                replacement.flush()
-                os.fsync(replacement.fileno())
-        else:
+        with path.open("a", encoding="utf-8") as stream:
             stream.write(json.dumps(event, sort_keys=True, ensure_ascii=False) + "\n")
             stream.flush()
             os.fsync(stream.fileno())
-            fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
-    path.chmod(0o640)
+        path.chmod(0o640)
+        fcntl.flock(lock_stream.fileno(), fcntl.LOCK_UN)
 
 
 def load_state(path: Path) -> dict[str, Any]:
@@ -103,7 +97,7 @@ def incident_id(alert_id: str) -> str:
 
 
 def audit_event(
-    transition: str,
+    transition_name: str,
     incident: dict[str, Any],
     *,
     actor: str,
@@ -115,7 +109,7 @@ def audit_event(
         "event_id": str(uuid.uuid4()),
         "event_type": "incident-transition",
         "occurred_at": now(),
-        "transition": transition,
+        "transition": transition_name,
         "incident_id": incident["incident_id"],
         "alert_id": incident["alert_id"],
         "severity": incident.get("severity"),
@@ -139,6 +133,14 @@ def normalize_alert(alert: dict[str, Any]) -> dict[str, Any]:
         "category": str(alert.get("category") or "other"),
         "message": str(alert.get("message") or ""),
     }
+
+
+def clear_silence(incident: dict[str, Any]) -> None:
+    incident["silenced_at"] = None
+    incident["silenced_until"] = None
+    incident["silenced_by"] = None
+    incident["silence_note"] = None
+    incident["pre_silence_status"] = None
 
 
 def sync_state(
@@ -177,6 +179,7 @@ def sync_state(
                 "silenced_until": None,
                 "silenced_by": None,
                 "silence_note": None,
+                "pre_silence_status": None,
                 "resolved_at": None,
                 "resolved_by": None,
                 "resolution_note": None,
@@ -193,10 +196,10 @@ def sync_state(
         previous = str(incident["status"])
         incident.update(alert)
         incident["last_seen_at"] = current
-        incident["occurrence_count"] = int(incident.get("occurrence_count", 0)) + 1
 
         if previous == "resolved":
             incident["status"] = "active"
+            incident["occurrence_count"] = int(incident.get("occurrence_count", 0)) + 1
             incident["resolved_at"] = None
             incident["resolved_by"] = None
             incident["resolution_note"] = None
@@ -213,11 +216,13 @@ def sync_state(
         elif previous == "silenced":
             until = incident.get("silenced_until")
             if not isinstance(until, str) or parse_timestamp(until) <= current_dt:
-                incident["status"] = "active"
-                incident["silenced_at"] = None
-                incident["silenced_until"] = None
-                incident["silenced_by"] = None
-                incident["silence_note"] = None
+                restored = (
+                    "acknowledged"
+                    if incident.get("pre_silence_status") == "acknowledged"
+                    else "active"
+                )
+                incident["status"] = restored
+                clear_silence(incident)
                 events.append(
                     audit_event(
                         "silence-expired",
@@ -265,7 +270,7 @@ def summarize_state(state: dict[str, Any], *, mode: str, success: bool = True) -
         key=lambda item: (
             1 if item.get("status") == "resolved" else 0,
             {"critical": 0, "warning": 1, "info": 2}.get(str(item.get("severity")), 9),
-            str(item.get("last_seen_at") or ""),
+            str(item.get("first_seen_at") or ""),
         ),
     )
     return {
@@ -307,11 +312,13 @@ def transition(
         incident["acknowledged_at"] = current
         incident["acknowledged_by"] = actor
         incident["acknowledge_note"] = note
+        clear_silence(incident)
     elif action == "silence":
         if previous == "resolved":
             raise ValueError("resolved incident cannot be silenced")
         if not silence_until or parse_timestamp(silence_until) <= datetime.now(timezone.utc):
             raise ValueError("silence end must be in the future")
+        incident["pre_silence_status"] = previous
         incident["status"] = "silenced"
         incident["silenced_at"] = current
         incident["silenced_until"] = silence_until
@@ -320,11 +327,12 @@ def transition(
     elif action == "unsilence":
         if previous != "silenced":
             raise ValueError("incident is not silenced")
-        incident["status"] = "active"
-        incident["silenced_at"] = None
-        incident["silenced_until"] = None
-        incident["silenced_by"] = None
-        incident["silence_note"] = None
+        incident["status"] = (
+            "acknowledged"
+            if incident.get("pre_silence_status") == "acknowledged"
+            else "active"
+        )
+        clear_silence(incident)
     elif action == "resolve":
         if previous == "resolved":
             raise ValueError("incident is already resolved")
@@ -353,22 +361,23 @@ def resolve_path(root: Path, value: str | None, default: Path) -> Path:
     return candidate.resolve() if candidate.is_absolute() else (root / candidate).resolve()
 
 
-def write_result(
+def persist_result(
     root: Path,
     state_path: Path,
     status_path: Path,
     state: dict[str, Any],
     events: list[dict[str, Any]],
-    *,
-    apply: bool,
 ) -> dict[str, Any]:
-    report = summarize_state(state, mode="apply" if apply else "dry-run")
+    report = summarize_state(state, mode="apply")
+    write_json_atomic(state_path, state, mode=0o600)
     write_json_atomic(status_path, report)
-    if apply:
-        write_json_atomic(state_path, state, mode=0o600)
-        for event in events:
-            append_audit_event(root, event)
+    for event in events:
+        append_audit_event(root, event)
     return report
+
+
+def print_dry_run(state: dict[str, Any]) -> None:
+    print(json.dumps(summarize_state(state, mode="dry-run"), indent=2, ensure_ascii=False))
 
 
 def command_sync(args: argparse.Namespace) -> int:
@@ -378,9 +387,12 @@ def command_sync(args: argparse.Namespace) -> int:
     state = load_state(state_path)
     alerts = ReportStore(root).alerts()
     updated, events = sync_state(state, alerts, actor=args.actor)
-    report = write_result(root, state_path, status_path, updated, events, apply=args.apply)
-    print(status_path)
-    return 0 if report["success"] else 2
+    if args.apply:
+        persist_result(root, state_path, status_path, updated, events)
+        print(status_path)
+    else:
+        print_dry_run(updated)
+    return 0
 
 
 def command_transition(args: argparse.Namespace) -> int:
@@ -404,8 +416,11 @@ def command_transition(args: argparse.Namespace) -> int:
         note=args.note,
         silence_until=silence_until,
     )
-    write_result(root, state_path, status_path, updated, [event], apply=args.apply)
-    print(status_path)
+    if args.apply:
+        persist_result(root, state_path, status_path, updated, [event])
+        print(status_path)
+    else:
+        print_dry_run(updated)
     return 0
 
 
