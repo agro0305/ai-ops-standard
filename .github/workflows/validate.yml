@@ -34,6 +34,7 @@ jobs:
           bash -n dashboard/install_systemd.sh
           bash -n dashboard/install_refresh_timer.sh
           bash -n dashboard/install_retention_timer.sh
+          bash -n dashboard/install_incident_timer.sh
           bash -n dashboard/install_notification_timer.sh
 
       - name: Run compliance tests
@@ -67,9 +68,18 @@ jobs:
             --output-dir /tmp/aiops-reports
           python -m json.tool /tmp/aiops-reports/refresh-status.json >/dev/null
 
-      - name: Smoke-test notification dry-run
+      - name: Smoke-test incident synchronization
         run: |
-          python scripts/notify_alerts.py \
+          python implementations/incidents/aiops_incidents.py \
+            --root /tmp/aiops-reports \
+            sync \
+            --actor github-actions \
+            --apply
+          python -m json.tool /tmp/aiops-reports/incident-status.json >/dev/null
+
+      - name: Smoke-test incident-aware notification dry-run
+        run: |
+          python scripts/notify_incident_alerts.py \
             --root /tmp/aiops-reports \
             --config examples/notifications.json
           python -m json.tool /tmp/aiops-reports/notification-status.json >/dev/null
