@@ -29,8 +29,8 @@ jobs:
       - name: Compile Python sources
         run: python -m compileall -q implementations scripts compliance/tests
 
-      - name: Test discovery implementation
-        run: python -m pytest -q compliance/tests/test_discovery.py
+      - name: Run compliance tests
+        run: python -m pytest -q compliance/tests
 
       - name: Smoke-test discovery CLI
         run: |
@@ -39,3 +39,15 @@ jobs:
             --compact \
             --output /tmp/discovery-report.json
           python -m json.tool /tmp/discovery-report.json >/dev/null
+
+      - name: Smoke-test planning and dry-run execution
+        run: |
+          python implementations/operations/aiops_operations.py plan \
+            --discovery /tmp/discovery-report.json \
+            --request examples/operation-request.json \
+            --output /tmp/operation-plan.json
+          python implementations/operations/aiops_operations.py execute \
+            --plan /tmp/operation-plan.json \
+            --output /tmp/execution-report.json
+          python -m json.tool /tmp/operation-plan.json >/dev/null
+          python -m json.tool /tmp/execution-report.json >/dev/null
