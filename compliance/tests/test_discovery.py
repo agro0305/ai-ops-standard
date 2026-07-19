@@ -4,7 +4,10 @@ import importlib.util
 import json
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
+
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "implementations" / "discovery" / "aiops_discovery.py"
@@ -26,6 +29,31 @@ def test_redaction_hides_common_secrets():
     assert "swordfish" not in redacted
     assert "hidden" not in redacted
     assert redacted.count("[REDACTED]") == 3
+
+
+def test_versions_probes_independent_commands_concurrently(monkeypatch):
+    module = load_module()
+    lock = threading.Lock()
+    state = {"active": 0, "peak": 0}
+
+    monkeypatch.setattr(module, "command_exists", lambda _command: True)
+
+    def fake_run(command, timeout=module.DEFAULT_VERSION_TIMEOUT):
+        with lock:
+            state["active"] += 1
+            state["peak"] = max(state["peak"], state["active"])
+        time.sleep(0.05)
+        with lock:
+            state["active"] -= 1
+        return {"command": command, "available": True, "return_code": 0}
+
+    monkeypatch.setattr(module, "run", fake_run)
+    commands = {f"tool-{index}": ["tool", str(index)] for index in range(4)}
+    results = module.versions(commands, max_workers=4)
+
+    assert state["peak"] > 1
+    assert list(results) == list(commands)
+    assert all(item["return_code"] == 0 for item in results.values())
 
 
 def test_cli_lists_collectors():
