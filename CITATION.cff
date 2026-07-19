@@ -2,9 +2,9 @@ cff-version: 1.2.0
 message: "If you use AI-OPS Standard, please cite this software and its specification."
 title: "AI-OPS Standard"
 type: software
-version: 0.2.0
-date-released: 2026-07-19
-doi: 10.5281/zenodo.21440196
+version: "0.2.0"
+date-released: "2026-07-19"
+doi: "10.5281/zenodo.21440196"
 license: Apache-2.0
 authors:
   - name: "agro0305"
