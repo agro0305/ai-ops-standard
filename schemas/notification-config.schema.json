@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-ops-standard.org/schemas/notification-config.schema.json",
+  "title": "AI-OPS Notification Configuration",
+  "type": "object",
+  "required": ["schema_version", "minimum_severity", "cooldown_seconds", "channels"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "minimum_severity": {"enum": ["info", "warning", "critical"]},
+    "cooldown_seconds": {"type": "integer", "minimum": 0},
+    "state_retention_seconds": {"type": "integer", "minimum": 0},
+    "channels": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["type", "enabled"],
+            "properties": {
+              "type": {"const": "stdout"},
+              "enabled": {"type": "boolean"}
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": ["type", "enabled", "url_env", "token_env"],
+            "properties": {
+              "type": {"const": "webhook"},
+              "enabled": {"type": "boolean"},
+              "url_env": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+              "token_env": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"},
+              "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 60},
+              "allow_http": {"type": "boolean"}
+            },
+            "additionalProperties": false
+          }
+        ]
+      }
+    }
+  },
+  "additionalProperties": false
+}
