@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-ops-standard.org/schemas/acceptance-result.schema.json",
+  "title": "AI-OPS Release Acceptance Result",
+  "type": "object",
+  "required": [
+    "schema_version", "generated_at", "project_root", "version",
+    "success", "duration_seconds", "steps"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "project_root": {"type": "string"},
+    "version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+    "success": {"type": "boolean"},
+    "duration_seconds": {"type": "number", "minimum": 0},
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "name", "argv", "returncode", "accepted", "duration_seconds",
+          "stdout", "stderr", "error"
+        ],
+        "properties": {
+          "name": {"type": "string"},
+          "argv": {"type": "array", "items": {"type": "string"}},
+          "returncode": {"type": "integer"},
+          "accepted": {"type": "boolean"},
+          "duration_seconds": {"type": "number", "minimum": 0},
+          "stdout": {"type": "string"},
+          "stderr": {"type": "string"},
+          "error": {"type": ["string", "null"]}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
