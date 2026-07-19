@@ -9,3 +9,26 @@ __pycache__/
 dist/
 build/
 node_modules/
+
+# AI-OPS generated private/runtime state
+/.aiops-audit/
+/.aiops-backups/
+/.aiops-incidents/
+/.aiops-notifications/
+/.aiops-refresh.lock
+
+# AI-OPS generated reports
+/discovery-report.json
+/ai-capability-registry.json
+/compliance-result.json
+/refresh-status.json
+/incident-status.json
+/notification-status.json
+/retention-result.json
+/retention-plan.json
+/operation-plan.json
+/execution-report.json
+/verification-report.json
+/rollback-report.json
+/acceptance-result.json
+/runtime-health.json
