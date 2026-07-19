@@ -12,7 +12,7 @@
     <div>
       <p class="eyebrow">AI-OPS STANDARD</p>
       <h1>Operativni pregled</h1>
-      <p class="subtitle">Read-only pregled discovery-ja, AI/MCP inventara, operacija i usklađenosti.</p>
+      <p class="subtitle">Read-only pregled discovery-ja, AI/MCP inventara, incidenata, operacija i usklađenosti.</p>
     </div>
     <div class="topbar-actions">
       <span id="connection-state" class="status-pill neutral">Učitavanje</span>
@@ -32,6 +32,18 @@
         <a href="/api/alerts">API</a>
       </div>
       <div id="alert-list" class="alert-list" aria-live="polite"></div>
+    </section>
+
+    <section class="panel incidents-panel" aria-label="Incidenti">
+      <div class="alerts-heading">
+        <div>
+          <h2>Incident lifecycle</h2>
+          <p class="muted">Read-only stanje: active, acknowledged, silenced i resolved.</p>
+        </div>
+        <a href="/api/reports/incident-status.json">JSON</a>
+      </div>
+      <div id="incident-summary" class="incident-summary"></div>
+      <div id="incident-list" class="incident-list" aria-live="polite"></div>
     </section>
 
     <section class="panel audit-panel" aria-label="Audit">
