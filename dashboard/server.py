@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import errno
 import hmac
 import html
@@ -37,7 +38,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(401)
         self.send_header("Content-Type", "text/plain; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("WWW-Authenticate", 'Bearer realm="AI-OPS Dashboard"')
+        self.send_header("WWW-Authenticate", 'Basic realm="AI-OPS Dashboard", charset="UTF-8"')
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
@@ -89,8 +90,24 @@ class Handler(BaseHTTPRequestHandler):
         print(f"{self.client_address[0]} - {fmt % args}", file=sys.stderr)
 
 
+def _basic_password(authorization: str) -> str:
+    if not authorization.startswith("Basic "):
+        return ""
+    encoded = authorization[6:].strip()
+    try:
+        decoded = base64.b64decode(encoded, validate=True).decode("utf-8")
+    except (ValueError, UnicodeDecodeError):
+        return ""
+    if ":" not in decoded:
+        return ""
+    username, password = decoded.split(":", 1)
+    if username != "aiops":
+        return ""
+    return password
+
+
 def request_is_authorized(headers: Mapping[str, str], token: str | None) -> bool:
-    """Validate Bearer or X-AI-OPS-Token credentials without leaking values."""
+    """Validate Basic, Bearer or X-AI-OPS-Token credentials."""
     if token is None:
         return True
 
@@ -98,6 +115,8 @@ def request_is_authorized(headers: Mapping[str, str], token: str | None) -> bool
     supplied = ""
     if authorization.startswith("Bearer "):
         supplied = authorization[7:].strip()
+    elif authorization.startswith("Basic "):
+        supplied = _basic_password(authorization)
     if not supplied:
         supplied = headers.get("X-AI-OPS-Token", "").strip()
     return bool(supplied) and hmac.compare_digest(supplied, token)
@@ -292,7 +311,8 @@ def main() -> int:
     if args.host in {"0.0.0.0", "::", ""} and not Handler.auth_token:
         print("Warning: dashboard is exposed on all interfaces and has no authentication.")
     elif args.host in {"0.0.0.0", "::", ""}:
-        print("Warning: Bearer authentication is enabled, but HTTP traffic is not encrypted.")
+        print("Browser login username: aiops")
+        print("Warning: authentication is enabled, but HTTP traffic is not encrypted.")
 
     try:
         server.serve_forever()
