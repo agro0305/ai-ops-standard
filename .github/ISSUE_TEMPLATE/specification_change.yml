@@ -1,0 +1,45 @@
+name: Specification change
+description: Propose a normative or compatibility-impacting change to AI-OPS
+title: "[Spec]: "
+labels: ["specification", "rfc", "needs-review"]
+body:
+  - type: input
+    id: documents
+    attributes:
+      label: Affected documents
+      placeholder: AIS-0004, AIS-0006, operation-plan.schema.json
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Explain the problem and why a normative change is necessary.
+    validations:
+      required: true
+  - type: textarea
+    id: normative
+    attributes:
+      label: Proposed normative language
+      description: Use MUST, SHOULD and MAY precisely.
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility and migration
+      description: Describe effects on existing records, implementations and deployments.
+    validations:
+      required: true
+  - type: textarea
+    id: security
+    attributes:
+      label: Security and safety considerations
+    validations:
+      required: true
+  - type: textarea
+    id: tests
+    attributes:
+      label: Required schemas and compliance tests
+    validations:
+      required: true
