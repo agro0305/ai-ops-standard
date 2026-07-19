@@ -4,6 +4,7 @@
 [![Documentation](https://github.com/agro0305/ai-ops-standard/actions/workflows/pages.yml/badge.svg)](https://github.com/agro0305/ai-ops-standard/actions/workflows/pages.yml)
 [![Version](https://img.shields.io/badge/version-0.2.0-brightgreen.svg)](docs/releases/0.2.0.md)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21440196.svg)](https://doi.org/10.5281/zenodo.21440196)
 
 Open standard and reference implementation for safe, repeatable and auditable AI operations on Linux infrastructure, MCP servers and AI coding agents.
 
@@ -14,6 +15,7 @@ AI-OPS defines how an agent discovers current state, plans a minimal change, obt
 - **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md)
 - **Security:** [SECURITY.md](SECURITY.md)
 - **Citation:** [CITATION.cff](CITATION.cff)
+- **Archive:** https://doi.org/10.5281/zenodo.21440196
 
 ## Project status
 
