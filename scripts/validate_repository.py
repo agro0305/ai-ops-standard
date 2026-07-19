@@ -106,8 +106,10 @@ def main() -> int:
             errors.append(f"{path}: schema root must be an object")
             continue
         schema_id = payload.get("$id")
+        if schema_id is None:
+            continue
         if not isinstance(schema_id, str) or not schema_id:
-            errors.append(f"{path}: schema must define a non-empty $id")
+            errors.append(f"{path}: schema $id must be a non-empty string")
         elif schema_id in schema_ids:
             errors.append(f"{path}: duplicate schema $id {schema_id!r}")
         else:
