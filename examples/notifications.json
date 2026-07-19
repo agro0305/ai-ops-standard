@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "minimum_severity": "critical",
+  "cooldown_seconds": 3600,
+  "state_retention_seconds": 2592000,
+  "channels": [
+    {
+      "type": "stdout",
+      "enabled": true
+    },
+    {
+      "type": "webhook",
+      "enabled": false,
+      "url_env": "AIOPS_NOTIFICATION_WEBHOOK_URL",
+      "token_env": "AIOPS_NOTIFICATION_TOKEN",
+      "timeout_seconds": 10,
+      "allow_http": false
+    }
+  ]
+}
