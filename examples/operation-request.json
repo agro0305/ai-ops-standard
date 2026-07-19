@@ -1,0 +1,30 @@
+{
+  "plan_id": "example-safe-write",
+  "intent": "Create a demonstration file without changing an existing service",
+  "preconditions": [
+    "Discovery report was generated on the target host",
+    "Target directory is writable"
+  ],
+  "actions": [
+    {
+      "type": "mkdir",
+      "path": "/tmp/aiops-example"
+    },
+    {
+      "type": "write_file",
+      "path": "/tmp/aiops-example/status.txt",
+      "content": "AI-OPS example\n"
+    }
+  ],
+  "verification": [
+    {
+      "type": "exists",
+      "path": "/tmp/aiops-example/status.txt"
+    },
+    {
+      "type": "file_contains",
+      "path": "/tmp/aiops-example/status.txt",
+      "text": "AI-OPS example"
+    }
+  ]
+}
