@@ -13,6 +13,7 @@ FRESHNESS_SECONDS = {
     "discovery": 45 * 60,
     "capabilities": 45 * 60,
     "compliance": 45 * 60,
+    "notification": 20 * 60,
 }
 IGNORED_PARTS = {
     ".git",
@@ -22,6 +23,7 @@ IGNORED_PARTS = {
     "__pycache__",
     ".pytest_cache",
     ".aiops-audit",
+    ".aiops-notifications",
 }
 
 
@@ -51,6 +53,16 @@ def classify_report(name: str, data: Any) -> str:
         ):
             return "refresh"
         if (
+            "notification-status" in lowered
+            or (
+                "mode" in data
+                and "active_alerts" in data
+                and "pending_alerts" in data
+                and "enabled_channels" in data
+            )
+        ):
+            return "notification"
+        if (
             isinstance(data.get("summary"), dict)
             and "results" in data
             and {"passed", "failed"} <= set(data["summary"])
@@ -72,6 +84,7 @@ def classify_report(name: str, data: Any) -> str:
         ("capability", "capabilities"),
         ("registry", "capabilities"),
         ("refresh-status", "refresh"),
+        ("notification-status", "notification"),
         ("compliance", "compliance"),
         ("operation-plan", "plan"),
         ("backup-manifest", "backup"),
@@ -131,6 +144,19 @@ def summarize_report(category: str, data: Any) -> dict[str, Any]:
             "duration_seconds": data.get("duration_seconds"),
             "reports": len(data.get("reports", [])),
             "failed_steps": failed_steps,
+            "generated_at": data.get("generated_at"),
+        }
+
+    if category == "notification":
+        channels = data.get("enabled_channels", [])
+        return {
+            "success": data.get("success"),
+            "mode": data.get("mode"),
+            "active_alerts": data.get("active_alerts", 0),
+            "pending_alerts": data.get("pending_alerts", 0),
+            "suppressed_alerts": data.get("suppressed_alerts", 0),
+            "dispatched_alerts": data.get("dispatched_alerts", 0),
+            "channels": len(channels) if isinstance(channels, list) else 0,
             "generated_at": data.get("generated_at"),
         }
 
@@ -320,6 +346,8 @@ class ReportStore:
             category = report.get("category")
             if category == "refresh" and summary.get("success") is False:
                 add(report, "refresh-failed", "critical", "Poslednje automatsko osvežavanje nije uspelo.")
+            elif category == "notification" and summary.get("success") is False:
+                add(report, "notification-failed", "critical", "Poslednje slanje upozorenja nije uspelo.")
             elif category == "compliance" and int(summary.get("failed", 0) or 0) > 0:
                 add(report, "compliance-failed", "warning", f"Neusaglašeni zahtevi: {summary.get('failed')}.")
             elif category == "execution" and summary.get("success") is False:
@@ -332,7 +360,13 @@ class ReportStore:
                 add(report, "backup-incomplete", "critical", "Backup manifest nije kompletan.")
 
         priority = {"critical": 0, "warning": 1, "info": 2}
-        alerts.sort(key=lambda item: (priority.get(item["severity"], 9), item["report"], item["type"]))
+        alerts.sort(
+            key=lambda item: (
+                priority.get(item["severity"], 9),
+                item["report"],
+                item["type"],
+            )
+        )
         return alerts
 
     def summary(self) -> dict[str, Any]:
