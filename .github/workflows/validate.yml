@@ -128,3 +128,18 @@ jobs:
             --audit-days 90 \
             --output /tmp/retention-plan.json
           python -m json.tool /tmp/retention-plan.json >/dev/null
+
+      - name: Run release acceptance without duplicate pytest
+        run: |
+          python scripts/acceptance.py \
+            --project-root . \
+            --skip-pytest \
+            --output /tmp/acceptance-result.json
+          python -m json.tool /tmp/acceptance-result.json >/dev/null
+
+      - name: Smoke-test runtime health report
+        run: |
+          python scripts/runtime_health.py \
+            --project-root . \
+            --output /tmp/runtime-health.json
+          python -m json.tool /tmp/runtime-health.json >/dev/null
