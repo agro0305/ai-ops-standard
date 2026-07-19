@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-ops-standard.org/schemas/rollback-report.schema.json",
+  "title": "AI-OPS Rollback Report",
+  "type": "object",
+  "required": [
+    "schema_version", "plan_id", "plan_digest", "rolled_back_at",
+    "apply", "manifest", "manifest_verified", "success", "results",
+    "command_results"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.1"},
+    "plan_id": {"type": "string"},
+    "plan_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "rolled_back_at": {"type": "string", "format": "date-time"},
+    "apply": {"type": "boolean"},
+    "manifest": {"type": "string"},
+    "manifest_verified": {"type": "boolean"},
+    "success": {"type": "boolean"},
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["source", "status"],
+        "properties": {
+          "source": {"type": "string"},
+          "status": {"enum": ["planned", "pending", "restored", "failed"]},
+          "error": {"type": "string"}
+        },
+        "additionalProperties": true
+      }
+    },
+    "command_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["index", "executable", "status"],
+        "properties": {
+          "index": {"type": "integer", "minimum": 0},
+          "executable": {"type": "string"},
+          "status": {"enum": ["planned", "pending", "completed", "failed"]},
+          "returncode": {"type": "integer"},
+          "stdout": {"type": "string"},
+          "stderr": {"type": "string"},
+          "error": {"type": "string"}
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": false
+}
