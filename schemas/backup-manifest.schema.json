@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-ops-standard.org/schemas/backup-manifest.schema.json",
+  "title": "AI-OPS Backup Manifest",
+  "type": "object",
+  "required": ["schema_version", "plan_id", "created_at", "backup_root", "entries", "complete"],
+  "properties": {
+    "schema_version": {"type": "string"},
+    "plan_id": {"type": "string", "minLength": 1},
+    "created_at": {"type": "string", "format": "date-time"},
+    "backup_root": {"type": "string"},
+    "complete": {"type": "boolean"},
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["source", "existed"],
+        "properties": {
+          "source": {"type": "string"},
+          "existed": {"type": "boolean"},
+          "type": {"enum": ["file", "directory"]},
+          "backup": {"type": "string"},
+          "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
