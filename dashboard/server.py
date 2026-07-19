@@ -11,6 +11,7 @@ import subprocess
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Any
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -116,39 +117,109 @@ def classify_address(address: str) -> str | None:
     return "Network"
 
 
-def discover_ipv4_addresses() -> list[tuple[str, str]]:
-    """Discover usable IPv4 addresses without failing dashboard startup."""
-    addresses: set[str] = {"127.0.0.1"}
+def is_virtual_interface(name: str) -> bool:
+    """Identify common container and local virtual bridge interfaces."""
+    lowered = name.lower()
+    prefixes = (
+        "docker",
+        "br-",
+        "veth",
+        "virbr",
+        "cni",
+        "flannel",
+        "cali",
+        "tunl",
+        "kube-ipvs",
+        "podman",
+        "lxcbr",
+    )
+    return lowered.startswith(prefixes)
 
+
+def _run_ip_json(arguments: list[str]) -> list[dict[str, Any]]:
     try:
         result = subprocess.run(
-            ["ip", "-j", "-4", "addr", "show", "up"],
+            ["ip", "-j", *arguments],
             check=False,
             capture_output=True,
             text=True,
             timeout=3,
         )
-        if result.returncode == 0:
-            for interface in json.loads(result.stdout or "[]"):
-                for item in interface.get("addr_info", []):
-                    if item.get("family") == "inet" and item.get("local"):
-                        addresses.add(str(item["local"]))
-    except (FileNotFoundError, OSError, subprocess.TimeoutExpired, json.JSONDecodeError):
-        pass
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+        return []
 
+    if result.returncode != 0:
+        return []
     try:
-        for item in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
-            addresses.add(str(item[4][0]))
-    except OSError:
-        pass
+        payload = json.loads(result.stdout or "[]")
+    except json.JSONDecodeError:
+        return []
+    return payload if isinstance(payload, list) else []
 
-    classified = []
+
+def discover_default_interfaces() -> set[str]:
+    interfaces: set[str] = set()
+    for route in _run_ip_json(["-4", "route", "show", "default"]):
+        device = route.get("dev")
+        if device:
+            interfaces.add(str(device))
+    return interfaces
+
+
+def discover_ipv4_addresses() -> list[tuple[str, str]]:
+    """Discover browser-relevant IPv4 addresses.
+
+    Always includes 127.0.0.1, includes addresses on interfaces carrying a
+    default route, and includes Tailscale addresses. Container bridges and
+    virtual Ethernet interfaces are excluded unless they carry the default
+    route.
+    """
+    addresses: set[tuple[str, str]] = {("Local", "127.0.0.1")}
+    default_interfaces = discover_default_interfaces()
+    found_non_loopback = False
+
+    for interface in _run_ip_json(["-4", "addr", "show", "up"]):
+        interface_name = str(interface.get("ifname") or "")
+        if not interface_name or interface_name == "lo":
+            continue
+
+        is_default = interface_name in default_interfaces
+        is_tailscale = interface_name.lower().startswith("tailscale")
+        if not is_default and not is_tailscale and is_virtual_interface(interface_name):
+            continue
+
+        # When a default route is known, suppress unrelated non-virtual
+        # interfaces as well. This keeps the output limited to usable entry
+        # points while still allowing Tailscale.
+        if default_interfaces and not is_default and not is_tailscale:
+            continue
+
+        for item in interface.get("addr_info", []):
+            if item.get("family") != "inet" or not item.get("local"):
+                continue
+            address = str(item["local"])
+            label = classify_address(address)
+            if label and label != "Local":
+                addresses.add((label, address))
+                found_non_loopback = True
+
+    # Minimal fallback for systems without the ip command or without a default
+    # route. Loopback aliases such as 127.0.1.1 are deliberately ignored.
+    if not found_non_loopback:
+        try:
+            for item in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+                address = str(item[4][0])
+                label = classify_address(address)
+                if label and label != "Local":
+                    addresses.add((label, address))
+        except OSError:
+            pass
+
     priority = {"Local": 0, "LAN": 1, "Tailscale": 2, "Network": 3}
-    for address in addresses:
-        label = classify_address(address)
-        if label:
-            classified.append((label, address))
-    return sorted(classified, key=lambda item: (priority[item[0]], ipaddress.ip_address(item[1])))
+    return sorted(
+        addresses,
+        key=lambda item: (priority[item[0]], ipaddress.ip_address(item[1])),
+    )
 
 
 def advertised_urls(bind_host: str, port: int) -> list[tuple[str, str]]:
