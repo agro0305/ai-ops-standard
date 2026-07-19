@@ -71,6 +71,63 @@ def test_dashboard_classifies_common_addresses():
     assert MODULE.classify_address("not-an-ip") is None
 
 
+def test_dashboard_identifies_container_virtual_interfaces():
+    assert MODULE.is_virtual_interface("docker0")
+    assert MODULE.is_virtual_interface("br-a1b2c3")
+    assert MODULE.is_virtual_interface("veth1234")
+    assert MODULE.is_virtual_interface("cni0")
+    assert not MODULE.is_virtual_interface("enp6s18")
+    assert not MODULE.is_virtual_interface("tailscale0")
+
+
+def test_dashboard_filters_bridge_and_loopback_alias_addresses(monkeypatch):
+    def fake_ip_json(arguments):
+        if arguments == ["-4", "route", "show", "default"]:
+            return [{"dst": "default", "dev": "enp6s18"}]
+        if arguments == ["-4", "addr", "show", "up"]:
+            return [
+                {
+                    "ifname": "lo",
+                    "addr_info": [
+                        {"family": "inet", "local": "127.0.0.1"},
+                        {"family": "inet", "local": "127.0.1.1"},
+                    ],
+                },
+                {
+                    "ifname": "enp6s18",
+                    "addr_info": [
+                        {"family": "inet", "local": "192.168.0.116"}
+                    ],
+                },
+                {
+                    "ifname": "docker0",
+                    "addr_info": [
+                        {"family": "inet", "local": "172.17.0.1"}
+                    ],
+                },
+                {
+                    "ifname": "br-a1b2c3",
+                    "addr_info": [
+                        {"family": "inet", "local": "172.18.0.1"}
+                    ],
+                },
+                {
+                    "ifname": "tailscale0",
+                    "addr_info": [
+                        {"family": "inet", "local": "100.79.70.40"}
+                    ],
+                },
+            ]
+        return []
+
+    monkeypatch.setattr(MODULE, "_run_ip_json", fake_ip_json)
+    assert MODULE.discover_ipv4_addresses() == [
+        ("Local", "127.0.0.1"),
+        ("LAN", "192.168.0.116"),
+        ("Tailscale", "100.79.70.40"),
+    ]
+
+
 def test_dashboard_advertises_explicit_host_only():
     assert MODULE.advertised_urls("192.168.0.110", 8789) == [
         ("LAN", "http://192.168.0.110:8789")
