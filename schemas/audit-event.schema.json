@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-ops-standard.org/schemas/audit-event.schema.json",
+  "title": "AI-OPS Audit Event",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "occurred_at",
+    "success",
+    "reports",
+    "failed_steps"
+  ],
+  "properties": {
+    "event_id": {"type": "string", "format": "uuid"},
+    "event_type": {"const": "report-refresh"},
+    "occurred_at": {"type": "string", "format": "date-time"},
+    "success": {"type": "boolean"},
+    "duration_seconds": {"type": ["number", "null"], "minimum": 0},
+    "project_root": {"type": ["string", "null"]},
+    "output_dir": {"type": ["string", "null"]},
+    "reports": {"type": "array", "items": {"type": "string"}},
+    "failed_steps": {"type": "array", "items": {"type": "string"}},
+    "error": {"type": ["string", "null"]}
+  },
+  "additionalProperties": false
+}
