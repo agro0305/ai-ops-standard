@@ -130,6 +130,10 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(self.store.summary())
             return
 
+        if path == "/api/alerts":
+            self._send_json(self.store.alerts())
+            return
+
         if path == "/api/reports":
             self._send_json(self.store.list_reports())
             return
@@ -235,10 +239,7 @@ def create_server(
         f"No available port found from {requested_port} "
         f"through {ports[-1] if ports else requested_port}."
     )
-    raise OSError(
-        last_error.errno if last_error else errno.EADDRINUSE,
-        message,
-    )
+    raise OSError(last_error.errno if last_error else errno.EADDRINUSE, message)
 
 
 def classify_address(address: str) -> str | None:
@@ -318,11 +319,7 @@ def discover_ipv4_addresses() -> list[tuple[str, str]]:
             continue
         is_default = interface_name in default_interfaces
         is_tailscale = interface_name.lower().startswith("tailscale")
-        if (
-            not is_default
-            and not is_tailscale
-            and is_virtual_interface(interface_name)
-        ):
+        if not is_default and not is_tailscale and is_virtual_interface(interface_name):
             continue
         if default_interfaces and not is_default and not is_tailscale:
             continue
@@ -337,11 +334,7 @@ def discover_ipv4_addresses() -> list[tuple[str, str]]:
 
     if not found_non_loopback:
         try:
-            for item in socket.getaddrinfo(
-                socket.gethostname(),
-                None,
-                socket.AF_INET,
-            ):
+            for item in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
                 address = str(item[4][0])
                 label = classify_address(address)
                 if label and label != "Local":
@@ -352,10 +345,7 @@ def discover_ipv4_addresses() -> list[tuple[str, str]]:
     priority = {"Local": 0, "LAN": 1, "Tailscale": 2, "Network": 3}
     return sorted(
         addresses,
-        key=lambda item: (
-            priority[item[0]],
-            ipaddress.ip_address(item[1]),
-        ),
+        key=lambda item: (priority[item[0]], ipaddress.ip_address(item[1])),
     )
 
 
@@ -384,11 +374,8 @@ def main() -> int:
     args = parser.parse_args()
 
     data_dir = Path(args.data_dir).resolve()
-    static_dir = DASHBOARD_DIR / "static"
     if not data_dir.is_dir():
         parser.error(f"data directory does not exist: {data_dir}")
-    if not static_dir.is_dir():
-        parser.error(f"dashboard static directory does not exist: {static_dir}")
     if args.max_port_attempts < 0:
         parser.error("--max-port-attempts must be zero or greater")
 
@@ -397,7 +384,6 @@ def main() -> int:
     except ValueError as exc:
         parser.error(str(exc))
     Handler.data_dir = data_dir
-    Handler.static_dir = static_dir.resolve()
     Handler.store = ReportStore(data_dir)
 
     try:
@@ -413,8 +399,7 @@ def main() -> int:
 
     if selected_port != args.port and args.port != 0:
         print(
-            f"Port {args.port} is occupied or unavailable; "
-            f"using port {selected_port} instead.",
+            f"Port {args.port} is occupied or unavailable; using port {selected_port} instead.",
             file=sys.stderr,
         )
 
@@ -423,16 +408,10 @@ def main() -> int:
         print(f"{label}: {url}")
     print(f"Authentication: {'enabled' if Handler.auth_token else 'disabled'}")
     if args.host in {"0.0.0.0", "::", ""} and not Handler.auth_token:
-        print(
-            "Warning: dashboard is exposed on all interfaces "
-            "and has no authentication."
-        )
+        print("Warning: dashboard is exposed on all interfaces and has no authentication.")
     elif args.host in {"0.0.0.0", "::", ""}:
         print("Browser login username: aiops")
-        print(
-            "Warning: authentication is enabled, "
-            "but HTTP traffic is not encrypted."
-        )
+        print("Warning: authentication is enabled, but HTTP traffic is not encrypted.")
 
     try:
         server.serve_forever()
