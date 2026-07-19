@@ -1,10 +1,11 @@
-const state = { reports: [], filtered: [], alerts: [], selected: null };
+const state = { reports: [], filtered: [], alerts: [], audit: [], selected: null };
 
 const elements = {
   kpis: document.querySelector("#kpi-grid"),
   reportRoot: document.querySelector("#report-root"),
   reportList: document.querySelector("#report-list"),
   alertList: document.querySelector("#alert-list"),
+  auditList: document.querySelector("#audit-list"),
   category: document.querySelector("#category-filter"),
   search: document.querySelector("#search-input"),
   refresh: document.querySelector("#refresh-button"),
@@ -101,11 +102,9 @@ function renderAlerts(alerts) {
     row.type = "button";
     row.className = `alert-row ${alert.severity}`;
     row.addEventListener("click", () => openReport(alert.report));
-
     const badge = document.createElement("span");
     badge.className = `badge ${alert.severity === "critical" ? "bad" : "warn"}`;
     badge.textContent = alert.severity.toUpperCase();
-
     const content = document.createElement("div");
     const message = document.createElement("strong");
     message.textContent = alert.message;
@@ -114,6 +113,33 @@ function renderAlerts(alerts) {
     content.append(message, report);
     row.append(badge, content);
     elements.alertList.append(row);
+  }
+}
+
+function renderAudit(events) {
+  elements.auditList.replaceChildren();
+  if (!events.length) {
+    const empty = document.createElement("div");
+    empty.className = "audit-empty";
+    empty.textContent = "Nema audit događaja.";
+    elements.auditList.append(empty);
+    return;
+  }
+  for (const event of events.slice(0, 10)) {
+    const row = document.createElement("div");
+    row.className = "audit-row";
+    const status = document.createElement("span");
+    status.className = `badge ${event.success === false ? "bad" : "good"}`;
+    status.textContent = event.success === false ? "FAIL" : "OK";
+    const content = document.createElement("div");
+    const title = document.createElement("strong");
+    title.textContent = event.event_type || "audit-event";
+    const meta = document.createElement("span");
+    const duration = event.duration_seconds == null ? "" : ` · ${event.duration_seconds}s`;
+    meta.textContent = `${formatDate(event.occurred_at)}${duration}`;
+    content.append(title, meta);
+    row.append(status, content);
+    elements.auditList.append(row);
   }
 }
 
@@ -128,12 +154,7 @@ function populateCategories() {
 }
 
 function searchableText(report) {
-  return JSON.stringify({
-    name: report.name,
-    category: report.category,
-    summary: report.summary,
-    stale: report.stale,
-  }).toLowerCase();
+  return JSON.stringify({ name: report.name, category: report.category, summary: report.summary, stale: report.stale }).toLowerCase();
 }
 
 function applyFilters() {
@@ -161,7 +182,6 @@ function renderReportList() {
     button.className = "report-row";
     if (state.selected === report.name) button.classList.add("active");
     button.addEventListener("click", () => openReport(report.name));
-
     const left = document.createElement("div");
     const name = document.createElement("div");
     name.className = "report-name";
@@ -170,7 +190,6 @@ function renderReportList() {
     meta.className = "report-meta";
     meta.textContent = `${formatBytes(report.size)} · ${formatDate(report.modified_at)} · starost ${formatAge(report.age_seconds)}`;
     left.append(name, meta);
-
     const right = document.createElement("div");
     right.className = "report-status";
     const [label, style] = statusFor(report);
@@ -189,13 +208,7 @@ function renderDetail(report) {
   elements.detailCategory.textContent = report.category;
   elements.detailName.textContent = report.name;
   elements.detailSummary.replaceChildren();
-  const values = {
-    ...(report.summary || {}),
-    stale: report.stale,
-    age: formatAge(report.age_seconds),
-    size: formatBytes(report.size),
-    modified_at: formatDate(report.modified_at),
-  };
+  const values = { ...(report.summary || {}), stale: report.stale, age: formatAge(report.age_seconds), size: formatBytes(report.size), modified_at: formatDate(report.modified_at) };
   for (const [key, value] of Object.entries(values)) {
     const item = document.createElement("div");
     item.className = "summary-item";
@@ -223,10 +236,7 @@ async function openReport(name) {
   loadingText.textContent = "Čitanje izveštaja…";
   elements.detailEmpty.append(loadingTitle, loadingText);
   try {
-    const response = await fetch(`/api/reports/${encodeURIComponent(name)}`, {
-      headers: { Accept: "application/json" },
-      cache: "no-store",
-    });
+    const response = await fetch(`/api/reports/${encodeURIComponent(name)}`, { headers: { Accept: "application/json" }, cache: "no-store" });
     const payload = await response.json();
     if (!response.ok && !payload.data) throw new Error(payload.error || `HTTP ${response.status}`);
     renderDetail(payload);
@@ -250,24 +260,26 @@ async function refresh() {
   loading.textContent = "Učitavanje izveštaja…";
   elements.reportList.append(loading);
   try {
-    const [summaryResponse, reportsResponse, alertsResponse] = await Promise.all([
+    const [summaryResponse, reportsResponse, alertsResponse, auditResponse] = await Promise.all([
       fetch("/api/summary", { cache: "no-store" }),
       fetch("/api/reports", { cache: "no-store" }),
       fetch("/api/alerts", { cache: "no-store" }),
+      fetch("/api/audit?limit=20", { cache: "no-store" }),
     ]);
-    if (!summaryResponse.ok || !reportsResponse.ok || !alertsResponse.ok) {
-      throw new Error(`HTTP ${summaryResponse.status}/${reportsResponse.status}/${alertsResponse.status}`);
+    if (![summaryResponse, reportsResponse, alertsResponse, auditResponse].every((response) => response.ok)) {
+      throw new Error(`HTTP ${summaryResponse.status}/${reportsResponse.status}/${alertsResponse.status}/${auditResponse.status}`);
     }
-    const [summary, reports, alerts] = await Promise.all([
-      summaryResponse.json(), reportsResponse.json(), alertsResponse.json(),
+    const [summary, reports, alerts, audit] = await Promise.all([
+      summaryResponse.json(), reportsResponse.json(), alertsResponse.json(), auditResponse.json(),
     ]);
     state.reports = reports;
     state.alerts = alerts;
+    state.audit = audit.events || [];
     renderSummary(summary);
     renderAlerts(alerts);
+    renderAudit(state.audit);
     populateCategories();
     applyFilters();
-
     const critical = alerts.filter((item) => item.severity === "critical").length;
     if (critical) {
       elements.connection.textContent = `${critical} kritično`;
