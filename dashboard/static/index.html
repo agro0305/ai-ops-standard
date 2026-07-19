@@ -22,6 +22,17 @@
   <main>
     <section id="kpi-grid" class="kpi-grid" aria-label="Sažetak"></section>
 
+    <section id="alerts-panel" class="panel alerts-panel" aria-label="Upozorenja">
+      <div class="alerts-heading">
+        <div>
+          <h2>Upozorenja</h2>
+          <p class="muted">Freshness, refresh, compliance i operativne greške.</p>
+        </div>
+        <a href="/api/alerts">API</a>
+      </div>
+      <div id="alert-list" class="alert-list" aria-live="polite"></div>
+    </section>
+
     <section class="panel toolbar">
       <div>
         <h2>Izveštaji</h2>
@@ -70,6 +81,7 @@
     <span>AI-OPS Dashboard · read-only</span>
     <a href="/healthz">healthz</a>
     <a href="/readyz">readyz</a>
+    <a href="/api/alerts">alerts</a>
     <a href="/api/reports">API</a>
   </footer>
 
