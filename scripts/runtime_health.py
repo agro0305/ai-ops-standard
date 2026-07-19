@@ -137,7 +137,7 @@ def check_http(url: str, *, required: bool) -> dict[str, Any]:
             headers={"Accept": "application/json", "User-Agent": "aiops-runtime-health/1.0"},
         )
         with urllib.request.urlopen(request, timeout=5) as response:
-            status = int(response.status)
+            http_status = int(response.status)
             body = response.read(4096).decode("utf-8", errors="replace")
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         return result(
@@ -146,16 +146,23 @@ def check_http(url: str, *, required: bool) -> dict[str, Any]:
             "endpoint is unavailable",
             error=str(exc),
         )
-    if not 200 <= status < 300:
+    if not 200 <= http_status < 300:
         return result(
-            f"http:{url}", "fail", f"unexpected HTTP status {status}", status=status
+            f"http:{url}",
+            "fail",
+            f"unexpected HTTP status {http_status}",
+            http_status=http_status,
         )
     try:
         payload = json.loads(body)
     except json.JSONDecodeError:
         payload = None
     return result(
-        f"http:{url}", "pass", "endpoint is available", status=status, payload=payload
+        f"http:{url}",
+        "pass",
+        "endpoint is available",
+        http_status=http_status,
+        payload=payload,
     )
 
 
