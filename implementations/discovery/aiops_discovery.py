@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import platform
+import pwd
 import re
 import shutil
 import socket
@@ -19,7 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 DEFAULT_TIMEOUT = 8
 DEFAULT_VERSION_TIMEOUT = 5
 DEFAULT_VERSION_WORKERS = 8
@@ -39,8 +40,100 @@ def redact(value: str) -> str:
     return result
 
 
+def candidate_homes() -> list[Path]:
+    """Return real user homes that may contain CLI installations.
+
+    Discovery is often launched by systemd with a minimal environment or as
+    root. In that case Path.home() and PATH do not describe the interactive
+    user installation. The search remains bounded to known local accounts.
+    """
+    homes: list[Path] = []
+
+    def add(raw: str | os.PathLike[str] | None) -> None:
+        if not raw:
+            return
+        path = Path(raw).expanduser()
+        if path.is_dir() and path not in homes:
+            homes.append(path)
+
+    add(os.environ.get("HOME"))
+    add(Path.home())
+
+    for name in (os.environ.get("USER"), os.environ.get("LOGNAME"), os.environ.get("SUDO_USER")):
+        if not name:
+            continue
+        try:
+            add(pwd.getpwnam(name).pw_dir)
+        except KeyError:
+            pass
+
+    if os.geteuid() == 0:
+        for account in pwd.getpwall():
+            if account.pw_uid >= 1000 and account.pw_dir not in {"/", "/nonexistent"}:
+                add(account.pw_dir)
+
+    return homes
+
+
+def candidate_search_paths() -> list[Path]:
+    """Build a deterministic executable search path for service and shell installs."""
+    paths: list[Path] = []
+
+    def add(raw: str | os.PathLike[str] | None) -> None:
+        if not raw:
+            return
+        path = Path(raw).expanduser()
+        if path.is_dir() and path not in paths:
+            paths.append(path)
+
+    for raw in os.environ.get("PATH", "").split(os.pathsep):
+        add(raw)
+
+    for raw in ("/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin", "/sbin", "/bin"):
+        add(raw)
+
+    for home in candidate_homes():
+        for relative in (
+            ".local/bin",
+            "bin",
+            ".kimi-code/bin",
+            ".npm-global/bin",
+            ".local/share/pnpm",
+            ".bun/bin",
+            ".deno/bin",
+            ".cargo/bin",
+            ".volta/bin",
+            ".asdf/shims",
+            ".local/share/mise/shims",
+        ):
+            add(home / relative)
+        for pattern in (
+            ".nvm/versions/node/*/bin",
+            ".local/share/mise/installs/node/*/bin",
+            ".asdf/installs/nodejs/*/bin",
+        ):
+            for path in sorted(home.glob(pattern), reverse=True):
+                add(path)
+
+    return paths
+
+
+def discovery_environment() -> dict[str, str]:
+    environment = {**os.environ, "LC_ALL": "C", "LANG": "C"}
+    environment["PATH"] = os.pathsep.join(str(path) for path in candidate_search_paths())
+    return environment
+
+
+def resolve_command(command: str) -> str | None:
+    if os.sep in command:
+        path = Path(command).expanduser()
+        return str(path) if path.is_file() and os.access(path, os.X_OK) else None
+    search_path = os.pathsep.join(str(path) for path in candidate_search_paths())
+    return shutil.which(command, path=search_path)
+
+
 def command_exists(command: str) -> bool:
-    return shutil.which(command) is not None
+    return resolve_command(command) is not None
 
 
 def run(command: list[str], timeout: int = DEFAULT_TIMEOUT) -> dict[str, Any]:
@@ -52,7 +145,7 @@ def run(command: list[str], timeout: int = DEFAULT_TIMEOUT) -> dict[str, Any]:
             capture_output=True,
             timeout=timeout,
             check=False,
-            env={**os.environ, "LC_ALL": "C", "LANG": "C"},
+            env=discovery_environment(),
         )
         return {
             "command": command,
@@ -93,9 +186,12 @@ def versions(
     """Probe independent version commands concurrently with bounded latency."""
     results: dict[str, Any] = {}
     runnable: dict[str, list[str]] = {}
+    resolved_paths: dict[str, str] = {}
     for name, command in commands.items():
-        if command_exists(command[0]):
-            runnable[name] = command
+        resolved = resolve_command(command[0])
+        if resolved:
+            runnable[name] = [resolved, *command[1:]]
+            resolved_paths[name] = resolved
         else:
             results[name] = {"available": False}
 
@@ -109,10 +205,13 @@ def versions(
             for future in as_completed(futures):
                 name = futures[future]
                 try:
-                    results[name] = future.result()
+                    result = future.result()
+                    result["resolved_path"] = resolved_paths[name]
+                    results[name] = result
                 except Exception as exc:  # individual probe isolation is intentional
                     results[name] = {
                         "command": runnable[name],
+                        "resolved_path": resolved_paths[name],
                         "available": True,
                         "error": type(exc).__name__,
                         "message": str(exc),
@@ -207,7 +306,7 @@ def collect_development() -> dict[str, Any]:
         "npm": ["npm", "--version"], "pnpm": ["pnpm", "--version"],
         "java": ["java", "-version"], "go": ["go", "version"],
         "rustc": ["rustc", "--version"], "docker": ["docker", "--version"],
-        "openapi_generator": ["openapi-generator", "version"],
+        "openapi_generator": ["openapi-generator-cli", "version"],
     }
     git_context = versions({
         "root": ["git", "rev-parse", "--show-toplevel"],
@@ -220,7 +319,7 @@ def collect_development() -> dict[str, Any]:
 
 def collect_ai() -> dict[str, Any]:
     agents = {
-        "kimi": ["kimi", "--version"], "claude": ["claude", "--version"],
+        "kimi": ["kimi", "-V"], "claude": ["claude", "--version"],
         "codex": ["codex", "--version"], "opencode": ["opencode", "--version"],
         "gemini": ["gemini", "--version"], "aider": ["aider", "--version"],
         "ollama": ["ollama", "--version"], "pai": ["pai", "--version"],
@@ -230,19 +329,22 @@ def collect_ai() -> dict[str, Any]:
         name,
         re.I,
     ))
-    config_roots = [
-        "~/.claude", "~/.codex", "~/.kimi", "~/.kimi-code",
-        "~/.config/opencode", "~/.opencode", "~/.config/kimi",
+    config_relatives = [
+        ".claude", ".codex", ".kimi", ".kimi-code",
+        ".config/opencode", ".opencode", ".config/kimi",
     ]
     configs: list[str] = []
-    for raw in config_roots:
-        root = Path(raw).expanduser()
-        if root.exists():
-            configs.append(str(root))
+    for home in candidate_homes():
+        for relative in config_relatives:
+            root = home / relative
+            if root.exists() and str(root) not in configs:
+                configs.append(str(root))
     return {
         "agents_and_gateways": versions(agents),
         "environment_variable_names": names,
         "known_config_roots": configs,
+        "searched_homes": [str(path) for path in candidate_homes()],
+        "searched_executable_paths": [str(path) for path in candidate_search_paths()],
         "related_processes": run(["ps", "auxww"]),
     }
 
