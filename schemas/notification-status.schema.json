@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-ops-standard.org/schemas/notification-status.schema.json",
+  "title": "AI-OPS Notification Dispatch Status",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "generated_at",
+    "mode",
+    "success",
+    "minimum_severity",
+    "cooldown_seconds",
+    "active_alerts",
+    "eligible_alerts",
+    "pending_alerts",
+    "suppressed_alerts",
+    "dispatched_alerts",
+    "enabled_channels",
+    "channel_results",
+    "pending"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "mode": {"enum": ["dry-run", "apply"]},
+    "success": {"type": "boolean"},
+    "minimum_severity": {"enum": ["info", "warning", "critical"]},
+    "cooldown_seconds": {"type": "integer", "minimum": 0},
+    "active_alerts": {"type": "integer", "minimum": 0},
+    "eligible_alerts": {"type": "integer", "minimum": 0},
+    "pending_alerts": {"type": "integer", "minimum": 0},
+    "suppressed_alerts": {"type": "integer", "minimum": 0},
+    "dispatched_alerts": {"type": "integer", "minimum": 0},
+    "enabled_channels": {
+      "type": "array",
+      "items": {"enum": ["stdout", "webhook"]}
+    },
+    "channel_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "success"],
+        "properties": {
+          "type": {"type": "string"},
+          "success": {"type": "boolean"},
+          "status": {"type": "integer"},
+          "error": {"type": "string"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "pending": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "severity", "report", "message"],
+        "properties": {
+          "id": {"type": ["string", "null"]},
+          "severity": {"enum": ["info", "warning", "critical"]},
+          "report": {"type": ["string", "null"]},
+          "message": {"type": ["string", "null"]}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
