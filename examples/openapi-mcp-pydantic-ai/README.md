@@ -60,7 +60,7 @@ chmod 600 ~/.config/aiops/new-api.env
 
 Never commit the token.
 
-## Run the agent
+## Run the Pydantic AI agent
 
 ```bash
 set -a
@@ -75,3 +75,11 @@ The agent must call both MCP tools:
 
 - `getHealth`
 - `getReadiness`
+
+## Use from another coding agent
+
+Copy the contents of `mcp-config.example.json` into the MCP configuration used by the coding agent. The configuration starts `run_mcp_server.sh`, which resolves the installed AWS Labs server and the OpenAPI specification automatically.
+
+Add the rules from `AGENT_INSTRUCTIONS.md` to the project's agent instruction file, such as `AGENTS.md` or `CLAUDE.md`.
+
+The MCP integration is currently read-only. It checks dashboard health and readiness; it does not perform or prove backup, execution, verification, rollback or audit operations.

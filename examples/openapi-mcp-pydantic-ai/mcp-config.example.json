@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "aiops-dashboard": {
+      "command": "bash",
+      "args": [
+        "examples/openapi-mcp-pydantic-ai/run_mcp_server.sh"
+      ]
+    }
+  }
+}
