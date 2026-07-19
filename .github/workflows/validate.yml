@@ -30,7 +30,9 @@ jobs:
         run: python -m compileall -q implementations scripts compliance/tests dashboard
 
       - name: Validate shell scripts
-        run: bash -n dashboard/install_systemd.sh
+        run: |
+          bash -n dashboard/install_systemd.sh
+          bash -n dashboard/install_refresh_timer.sh
 
       - name: Run compliance tests
         run: python -m pytest -q compliance/tests
@@ -54,3 +56,11 @@ jobs:
             --output /tmp/execution-report.json
           python -m json.tool /tmp/operation-plan.json >/dev/null
           python -m json.tool /tmp/execution-report.json >/dev/null
+
+      - name: Smoke-test atomic report refresh
+        run: |
+          mkdir -p /tmp/aiops-reports
+          python scripts/refresh_reports.py \
+            --project-root . \
+            --output-dir /tmp/aiops-reports
+          python -m json.tool /tmp/aiops-reports/refresh-status.json >/dev/null
