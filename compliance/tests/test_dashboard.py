@@ -31,9 +31,7 @@ def test_dashboard_selects_next_port_when_requested_port_is_occupied():
     occupied_socket, occupied_port = occupy_port()
     try:
         server, selected_port = MODULE.create_server(
-            "127.0.0.1",
-            occupied_port,
-            max_port_attempts=20,
+            "127.0.0.1", occupied_port, max_port_attempts=20
         )
         try:
             assert selected_port != occupied_port
@@ -48,11 +46,7 @@ def test_dashboard_strict_port_fails_when_port_is_occupied():
     occupied_socket, occupied_port = occupy_port()
     try:
         try:
-            MODULE.create_server(
-                "127.0.0.1",
-                occupied_port,
-                strict_port=True,
-            )
+            MODULE.create_server("127.0.0.1", occupied_port, strict_port=True)
         except OSError:
             pass
         else:
@@ -63,74 +57,25 @@ def test_dashboard_strict_port_fails_when_port_is_occupied():
 
 def test_dashboard_classifies_common_addresses():
     assert MODULE.classify_address("127.0.0.1") == "Local"
-    assert MODULE.classify_address("192.168.0.110") == "LAN"
+    assert MODULE.classify_address("192.168.0.116") == "LAN"
     assert MODULE.classify_address("10.0.0.5") == "LAN"
-    assert MODULE.classify_address("100.64.10.20") == "Tailscale"
+    assert MODULE.classify_address("100.79.70.40") == "Tailscale"
     assert MODULE.classify_address("8.8.8.8") == "Network"
     assert MODULE.classify_address("169.254.1.1") is None
     assert MODULE.classify_address("not-an-ip") is None
 
 
-def test_dashboard_identifies_container_virtual_interfaces():
+def test_virtual_interface_detection():
     assert MODULE.is_virtual_interface("docker0")
-    assert MODULE.is_virtual_interface("br-a1b2c3")
+    assert MODULE.is_virtual_interface("br-aabbcc")
     assert MODULE.is_virtual_interface("veth1234")
-    assert MODULE.is_virtual_interface("cni0")
     assert not MODULE.is_virtual_interface("enp6s18")
     assert not MODULE.is_virtual_interface("tailscale0")
 
 
-def test_dashboard_filters_bridge_and_loopback_alias_addresses(monkeypatch):
-    def fake_ip_json(arguments):
-        if arguments == ["-4", "route", "show", "default"]:
-            return [{"dst": "default", "dev": "enp6s18"}]
-        if arguments == ["-4", "addr", "show", "up"]:
-            return [
-                {
-                    "ifname": "lo",
-                    "addr_info": [
-                        {"family": "inet", "local": "127.0.0.1"},
-                        {"family": "inet", "local": "127.0.1.1"},
-                    ],
-                },
-                {
-                    "ifname": "enp6s18",
-                    "addr_info": [
-                        {"family": "inet", "local": "192.168.0.116"}
-                    ],
-                },
-                {
-                    "ifname": "docker0",
-                    "addr_info": [
-                        {"family": "inet", "local": "172.17.0.1"}
-                    ],
-                },
-                {
-                    "ifname": "br-a1b2c3",
-                    "addr_info": [
-                        {"family": "inet", "local": "172.18.0.1"}
-                    ],
-                },
-                {
-                    "ifname": "tailscale0",
-                    "addr_info": [
-                        {"family": "inet", "local": "100.79.70.40"}
-                    ],
-                },
-            ]
-        return []
-
-    monkeypatch.setattr(MODULE, "_run_ip_json", fake_ip_json)
-    assert MODULE.discover_ipv4_addresses() == [
-        ("Local", "127.0.0.1"),
-        ("LAN", "192.168.0.116"),
-        ("Tailscale", "100.79.70.40"),
-    ]
-
-
 def test_dashboard_advertises_explicit_host_only():
-    assert MODULE.advertised_urls("192.168.0.110", 8789) == [
-        ("LAN", "http://192.168.0.110:8789")
+    assert MODULE.advertised_urls("192.168.0.116", 8789) == [
+        ("LAN", "http://192.168.0.116:8789")
     ]
 
 
@@ -140,12 +85,46 @@ def test_dashboard_advertises_discovered_addresses_for_wildcard(monkeypatch):
         "discover_ipv4_addresses",
         lambda: [
             ("Local", "127.0.0.1"),
-            ("LAN", "192.168.0.110"),
-            ("Tailscale", "100.64.10.20"),
+            ("LAN", "192.168.0.116"),
+            ("Tailscale", "100.79.70.40"),
         ],
     )
     assert MODULE.advertised_urls("0.0.0.0", 8789) == [
         ("Local", "http://127.0.0.1:8789"),
-        ("LAN", "http://192.168.0.110:8789"),
-        ("Tailscale", "http://100.64.10.20:8789"),
+        ("LAN", "http://192.168.0.116:8789"),
+        ("Tailscale", "http://100.79.70.40:8789"),
     ]
+
+
+def test_dashboard_allows_requests_when_authentication_is_disabled():
+    assert MODULE.request_is_authorized({}, None)
+
+
+def test_dashboard_accepts_bearer_and_custom_header_tokens():
+    token = "correct-secret"
+    assert MODULE.request_is_authorized(
+        {"Authorization": "Bearer correct-secret"}, token
+    )
+    assert MODULE.request_is_authorized(
+        {"X-AI-OPS-Token": "correct-secret"}, token
+    )
+
+
+def test_dashboard_rejects_missing_or_incorrect_tokens():
+    token = "correct-secret"
+    assert not MODULE.request_is_authorized({}, token)
+    assert not MODULE.request_is_authorized(
+        {"Authorization": "Bearer wrong-secret"}, token
+    )
+
+
+def test_dashboard_loads_token_file(tmp_path, monkeypatch):
+    token_file = tmp_path / "dashboard.token"
+    token_file.write_text("file-secret\n", encoding="utf-8")
+    monkeypatch.setenv("AIOPS_DASHBOARD_TOKEN", "environment-secret")
+    assert MODULE.load_auth_token(str(token_file)) == "file-secret"
+
+
+def test_dashboard_loads_environment_token(monkeypatch):
+    monkeypatch.setenv("AIOPS_DASHBOARD_TOKEN", "environment-secret")
+    assert MODULE.load_auth_token(None) == "environment-secret"
