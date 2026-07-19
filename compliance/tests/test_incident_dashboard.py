@@ -56,6 +56,12 @@ def test_private_incident_state_is_not_indexed_but_status_is_visible(tmp_path):
 def test_dashboard_contains_read_only_incident_panel():
     index = (ROOT / "dashboard" / "static" / "index.html").read_text(encoding="utf-8")
     app = (ROOT / "dashboard" / "static" / "app.js").read_text(encoding="utf-8")
+    server = (ROOT / "dashboard" / "server.py").read_text(encoding="utf-8")
+
     assert 'id="incident-list"' in index
     assert "/api/reports/incident-status.json" in app
-    assert "acknowledge" not in index.lower()
+    assert "<form" not in index.lower()
+    assert 'method: "post"' not in app.lower()
+    assert "method: 'post'" not in app.lower()
+    assert "/api/incidents/" not in app
+    assert "def do_POST" not in server
