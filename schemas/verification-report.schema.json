@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-ops-standard.org/schemas/verification-report.schema.json",
+  "title": "AI-OPS Verification Report",
+  "type": "object",
+  "required": ["schema_version", "plan_id", "plan_digest", "verified_at", "passed", "results"],
+  "properties": {
+    "schema_version": {"const": "1.1"},
+    "plan_id": {"type": "string"},
+    "plan_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "verified_at": {"type": "string", "format": "date-time"},
+    "passed": {"type": "boolean"},
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["check", "passed"],
+        "properties": {
+          "check": {},
+          "passed": {"type": "boolean"},
+          "actual": {"type": "string"},
+          "returncode": {"type": "integer"},
+          "stdout": {"type": "string"},
+          "stderr": {"type": "string"},
+          "error": {"type": ["string", "null"]}
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": false
+}
