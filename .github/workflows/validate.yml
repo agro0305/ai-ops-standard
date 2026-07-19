@@ -48,17 +48,53 @@ jobs:
             --output /tmp/discovery-report.json
           python -m json.tool /tmp/discovery-report.json >/dev/null
 
-      - name: Smoke-test planning and dry-run execution
+      - name: End-to-end safe operation lifecycle
         run: |
+          rm -rf /tmp/aiops-example /tmp/aiops-backups
           python implementations/operations/aiops_operations.py plan \
             --discovery /tmp/discovery-report.json \
             --request examples/operation-request.json \
             --output /tmp/operation-plan.json
+
+          python implementations/operations/aiops_operations.py backup \
+            --plan /tmp/operation-plan.json \
+            --backup-root /tmp/aiops-backups
+
+          MANIFEST=/tmp/aiops-backups/example-safe-write/backup-manifest.json
+          python -m json.tool "$MANIFEST" >/dev/null
+
           python implementations/operations/aiops_operations.py execute \
             --plan /tmp/operation-plan.json \
+            --output /tmp/execution-dry-run.json
+          test ! -e /tmp/aiops-example/status.txt
+
+          python implementations/operations/aiops_operations.py execute \
+            --plan /tmp/operation-plan.json \
+            --manifest "$MANIFEST" \
+            --apply \
             --output /tmp/execution-report.json
-          python -m json.tool /tmp/operation-plan.json >/dev/null
+          test -f /tmp/aiops-example/status.txt
+
+          python implementations/operations/aiops_operations.py verify \
+            --plan /tmp/operation-plan.json \
+            --output /tmp/verification-report.json
+
+          python implementations/operations/aiops_operations.py rollback \
+            --plan /tmp/operation-plan.json \
+            --manifest "$MANIFEST" \
+            --output /tmp/rollback-preview.json
+          test -f /tmp/aiops-example/status.txt
+
+          python implementations/operations/aiops_operations.py rollback \
+            --plan /tmp/operation-plan.json \
+            --manifest "$MANIFEST" \
+            --apply \
+            --output /tmp/rollback-report.json
+          test ! -e /tmp/aiops-example
+
           python -m json.tool /tmp/execution-report.json >/dev/null
+          python -m json.tool /tmp/verification-report.json >/dev/null
+          python -m json.tool /tmp/rollback-report.json >/dev/null
 
       - name: Smoke-test atomic report refresh
         run: |
