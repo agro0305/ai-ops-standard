@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-VERSION = "0.2.1"
+VERSION = "0.2.2"
 SUPPORTED_ACTIONS = {"mkdir", "write_file", "copy_file", "delete", "command"}
 PLAN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 PROTECTED_EXACT_TARGETS = {
@@ -178,7 +178,8 @@ def validate_argv(value: Any, field: str) -> list[str]:
 def normalize_path(value: Any) -> str:
     if not isinstance(value, str) or not value.strip() or "\x00" in value:
         raise ValueError("filesystem path must be a non-empty string")
-    return str(Path(value).expanduser().resolve(strict=False))
+    expanded = os.path.expanduser(value)
+    return os.path.abspath(os.path.normpath(expanded))
 
 
 def normalize_target_path(value: Any) -> str:
