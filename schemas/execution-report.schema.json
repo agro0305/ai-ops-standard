@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-ops-standard.org/schemas/execution-report.schema.json",
+  "title": "AI-OPS Execution Report",
+  "type": "object",
+  "required": [
+    "schema_version", "plan_id", "plan_digest", "started_at", "apply",
+    "manifest", "backup_verified", "preconditions", "results", "success",
+    "finished_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.1"},
+    "plan_id": {"type": "string"},
+    "plan_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "started_at": {"type": "string", "format": "date-time"},
+    "finished_at": {"type": "string", "format": "date-time"},
+    "apply": {"type": "boolean"},
+    "manifest": {"type": ["string", "null"]},
+    "backup_verified": {"type": "boolean"},
+    "preconditions": {"type": "array", "items": {"type": "object"}},
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["index", "action", "status"],
+        "properties": {
+          "index": {"type": "integer", "minimum": 0},
+          "action": {"type": "object"},
+          "status": {"enum": ["planned", "pending", "completed", "failed"]},
+          "returncode": {"type": "integer"},
+          "stdout": {"type": "string"},
+          "stderr": {"type": "string"},
+          "error": {"type": "string"}
+        },
+        "additionalProperties": true
+      }
+    },
+    "success": {"type": "boolean"},
+    "error": {"type": "string"}
+  },
+  "additionalProperties": true
+}
