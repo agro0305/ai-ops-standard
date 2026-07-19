@@ -3,24 +3,41 @@
   "$id": "https://ai-ops-standard.org/schemas/backup-manifest.schema.json",
   "title": "AI-OPS Backup Manifest",
   "type": "object",
-  "required": ["schema_version", "plan_id", "created_at", "backup_root", "entries", "complete"],
+  "required": [
+    "schema_version", "plan_id", "plan_digest", "created_at",
+    "backup_root", "risk", "targets", "entries", "complete", "errors"
+  ],
   "properties": {
-    "schema_version": {"type": "string"},
-    "plan_id": {"type": "string", "minLength": 1},
+    "schema_version": {"const": "1.1"},
+    "plan_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "plan_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "created_at": {"type": "string", "format": "date-time"},
     "backup_root": {"type": "string"},
+    "risk": {"type": "object"},
+    "targets": {
+      "type": "array",
+      "items": {"type": "string"},
+      "uniqueItems": true
+    },
     "complete": {"type": "boolean"},
+    "errors": {"type": "array", "items": {"type": "string"}},
     "entries": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["source", "existed"],
+        "required": ["source", "existed", "status"],
         "properties": {
           "source": {"type": "string"},
           "existed": {"type": "boolean"},
-          "type": {"enum": ["file", "directory"]},
+          "status": {"enum": ["completed", "failed"]},
+          "type": {"enum": ["file", "directory", "symlink"]},
           "backup": {"type": "string"},
-          "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+          "source_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "backup_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "error": {"type": "string"}
         },
         "additionalProperties": false
       }
