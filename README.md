@@ -1,8 +1,16 @@
 # AI-OPS Standard
 
-Open standard for safe, repeatable and auditable AI operations on Linux infrastructure, MCP servers and AI coding agents.
+Open standard and reference implementation for safe, repeatable and auditable AI operations on Linux infrastructure, MCP servers and AI coding agents.
 
-AI-OPS defines how an AI agent discovers current state, plans a minimal change, obtains approval, creates backups, executes, verifies, rolls back and produces an audit record.
+AI-OPS defines how an agent discovers current state, plans a minimal change, obtains approval, creates and verifies backups, executes, verifies the result, rolls back safely, manages incidents and produces an audit trail.
+
+## Project status
+
+- Project version: **0.2.0**
+- Release stage: **reference implementation release candidate**
+- Specification status: **Draft**
+- Canonical language: **English**
+- Serbian documentation: maintained in parallel
 
 ## Project layers
 
@@ -11,14 +19,82 @@ AI-OPS Standard
 ├── Specification
 ├── Reference Implementation
 ├── Compliance Suite
-└── Dashboard
+├── Dashboard and Observability
+└── Operations and Incident Lifecycle
 ```
 
 ## Lifecycle
 
 ```text
-Discovery → Analysis → Plan → Approval → Backup → Execution → Verification → Rollback Decision → Audit
+Discovery
+  → Capability Registry
+  → Analysis
+  → Plan
+  → Approval
+  → Verified Backup
+  → Execution
+  → Verification
+  → Rollback Decision
+  → Incident Lifecycle
+  → Notification
+  → Audit
 ```
+
+## Implemented capabilities
+
+- Linux system and development-environment discovery;
+- AI coding-agent and MCP capability registry;
+- deterministic compliance evaluation;
+- authenticated local-first dashboard;
+- freshness monitoring, alerts, Prometheus metrics and audit browsing;
+- atomic scheduled report refresh;
+- verified backup manifests bound to the exact operation plan;
+- dry-run-by-default execution and rollback;
+- protected-root and symlink safeguards;
+- incident states: active, acknowledged, silenced and resolved;
+- incident-aware notification deduplication and cooldown;
+- backup and audit-log retention;
+- hardened systemd services and timers;
+- full non-destructive release acceptance runner;
+- read-only runtime health checker.
+
+## Validate and test
+
+```bash
+python3 scripts/validate_repository.py
+python3 -m pytest -q compliance/tests
+python3 scripts/acceptance.py \
+  --project-root . \
+  --output acceptance-result.json
+```
+
+Acceptance runs the complete safe operation lifecycle in a temporary directory and exercises incident opening, acknowledgement and automatic resolution. It does not modify production paths or services.
+
+## Runtime health
+
+```bash
+python3 scripts/runtime_health.py \
+  --project-root . \
+  --dashboard-url http://127.0.0.1:8789 \
+  --require-services \
+  --output runtime-health.json
+```
+
+## Installation
+
+Use the ordered installation and upgrade procedure in:
+
+```text
+docs/INSTALLATION.md
+```
+
+The required service order is:
+
+```text
+report refresh → incident synchronization → notifications
+```
+
+Retention runs independently. The dashboard remains read-only and reads the latest generated reports.
 
 ## Specifications
 
@@ -43,25 +119,22 @@ English documents are canonical. Serbian translations use the `.sr.md` suffix.
 
 ## Repository
 
-- `specifications/` — normative documents
-- `implementations/` — reference implementation
-- `compliance/` — conformance tests and fixtures
-- `schemas/` — machine-readable records
-- `dashboard/` — local-first operational UI
-- `templates/` — reports and plans
-- `skills/` — instructions for AI agents
-- `rfcs/` — proposals before standardization
-
-## Current status
-
-- Project version: 0.1.0
-- Specification status: Draft
-- Canonical language: English
-- Serbian documentation: maintained in parallel
+- `specifications/` — normative documents;
+- `implementations/` — reference implementations;
+- `compliance/` — conformance and safety tests;
+- `schemas/` — machine-readable records;
+- `dashboard/` — local-first operational UI and systemd installers;
+- `scripts/` — refresh, notification, retention, acceptance and health tools;
+- `docs/` — installation and operational documentation;
+- `templates/` — reports and plans;
+- `skills/` — instructions for AI agents;
+- `rfcs/` — proposals before standardization.
 
 ## Scope
 
 Initial targets include Ubuntu and other Linux systems, systemd, Docker, Podman, Kubernetes discovery, Git, MCP servers, Kimi Code, Claude Code, Codex CLI, OpenCode, model gateways, OpenAPI, Pydantic AI, local networks and Tailscale.
+
+State-changing adapters for package managers, firewalls, storage controllers and industrial equipment remain domain-specific and require additional policy and safety validation.
 
 ## License
 
