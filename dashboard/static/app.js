@@ -1,4 +1,7 @@
-const state = { reports: [], filtered: [], alerts: [], audit: [], selected: null };
+const state = {
+  reports: [], filtered: [], alerts: [], audit: [], incidents: [],
+  incidentSummary: {}, selected: null,
+};
 
 const elements = {
   kpis: document.querySelector("#kpi-grid"),
@@ -6,6 +9,8 @@ const elements = {
   reportList: document.querySelector("#report-list"),
   alertList: document.querySelector("#alert-list"),
   auditList: document.querySelector("#audit-list"),
+  incidentList: document.querySelector("#incident-list"),
+  incidentSummary: document.querySelector("#incident-summary"),
   category: document.querySelector("#category-filter"),
   search: document.querySelector("#search-input"),
   refresh: document.querySelector("#refresh-button"),
@@ -42,8 +47,14 @@ function statusFor(report) {
   const summary = report.summary || {};
   if (report.error) return ["Greška", "bad"];
   if (report.stale) return ["STALE", "warn"];
+  if (report.name === "incident-status.json") {
+    return ["INCIDENTS", "neutral"];
+  }
   if (report.category === "refresh") {
     return summary.success === false ? ["FAIL", "bad"] : ["FRESH", "good"];
+  }
+  if (report.category === "notification") {
+    return summary.success === false ? ["FAIL", "bad"] : ["OK", "good"];
   }
   if (report.category === "compliance") {
     return Number(summary.failed || 0) === 0 ? ["PASS", "good"] : ["FAIL", "bad"];
@@ -82,6 +93,7 @@ function renderSummary(summary) {
     kpi("Izveštaji", summary.report_count),
     kpi("Stale", summary.stale_reports || 0),
     kpi("Upozorenja", summary.alerts?.total || 0),
+    kpi("Otvoreni incidenti", state.incidentSummary.open || 0),
     kpi("Compliance PASS", summary.compliance?.passed || 0),
     kpi("Compliance FAIL", summary.compliance?.failed || 0),
   );
@@ -116,6 +128,65 @@ function renderAlerts(alerts) {
   }
 }
 
+function incidentBadge(incident) {
+  const status = incident.status || "active";
+  if (status === "resolved") return ["RESOLVED", "good"];
+  if (status === "silenced") return ["SILENCED", "warn"];
+  if (status === "acknowledged") return ["ACK", "neutral"];
+  return ["ACTIVE", incident.severity === "critical" ? "bad" : "warn"];
+}
+
+function renderIncidents(incidents, summary, error = null) {
+  elements.incidentSummary.replaceChildren();
+  elements.incidentList.replaceChildren();
+  if (error) {
+    const item = document.createElement("div");
+    item.className = "incident-empty";
+    item.textContent = error;
+    elements.incidentList.append(item);
+    return;
+  }
+
+  for (const key of ["open", "active", "acknowledged", "silenced", "resolved"]) {
+    const pill = document.createElement("span");
+    pill.className = "incident-count";
+    pill.textContent = `${key}: ${summary?.[key] || 0}`;
+    elements.incidentSummary.append(pill);
+  }
+
+  const visible = incidents
+    .filter((item) => item.status !== "resolved")
+    .concat(incidents.filter((item) => item.status === "resolved"))
+    .slice(0, 20);
+  if (!visible.length) {
+    const empty = document.createElement("div");
+    empty.className = "incident-empty";
+    empty.textContent = "Nema evidentiranih incidenata.";
+    elements.incidentList.append(empty);
+    return;
+  }
+
+  for (const incident of visible) {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = `incident-row ${incident.status || "active"}`;
+    row.addEventListener("click", () => openReport("incident-status.json"));
+    const [label, style] = incidentBadge(incident);
+    const badge = document.createElement("span");
+    badge.className = `badge ${style}`;
+    badge.textContent = label;
+    const content = document.createElement("div");
+    const message = document.createElement("strong");
+    message.textContent = incident.message || incident.alert_id || "Incident";
+    const meta = document.createElement("span");
+    const until = incident.status === "silenced" ? ` · do ${formatDate(incident.silenced_until)}` : "";
+    meta.textContent = `${incident.severity || "info"} · ${incident.alert_id || incident.incident_id}${until}`;
+    content.append(message, meta);
+    row.append(badge, content);
+    elements.incidentList.append(row);
+  }
+}
+
 function renderAudit(events) {
   elements.auditList.replaceChildren();
   if (!events.length) {
@@ -136,7 +207,8 @@ function renderAudit(events) {
     title.textContent = event.event_type || "audit-event";
     const meta = document.createElement("span");
     const duration = event.duration_seconds == null ? "" : ` · ${event.duration_seconds}s`;
-    meta.textContent = `${formatDate(event.occurred_at)}${duration}`;
+    const transition = event.transition ? ` · ${event.transition}` : "";
+    meta.textContent = `${formatDate(event.occurred_at)}${duration}${transition}`;
     content.append(title, meta);
     row.append(status, content);
     elements.auditList.append(row);
@@ -251,6 +323,26 @@ async function openReport(name) {
   }
 }
 
+async function loadIncidentReport() {
+  const response = await fetch("/api/reports/incident-status.json", { cache: "no-store" });
+  if (response.status === 404) {
+    state.incidents = [];
+    state.incidentSummary = {};
+    renderIncidents([], {}, "Incident sync još nije pokrenut.");
+    return;
+  }
+  const payload = await response.json();
+  if (!response.ok || !payload.data) {
+    state.incidents = [];
+    state.incidentSummary = {};
+    renderIncidents([], {}, payload.error || `Incident HTTP ${response.status}`);
+    return;
+  }
+  state.incidents = Array.isArray(payload.data.incidents) ? payload.data.incidents : [];
+  state.incidentSummary = payload.data.summary || {};
+  renderIncidents(state.incidents, state.incidentSummary);
+}
+
 async function refresh() {
   elements.connection.textContent = "Učitavanje";
   elements.connection.className = "status-pill neutral";
@@ -275,6 +367,7 @@ async function refresh() {
     state.reports = reports;
     state.alerts = alerts;
     state.audit = audit.events || [];
+    await loadIncidentReport();
     renderSummary(summary);
     renderAlerts(alerts);
     renderAudit(state.audit);
