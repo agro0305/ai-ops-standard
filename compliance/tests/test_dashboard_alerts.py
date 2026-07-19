@@ -70,6 +70,43 @@ def test_stale_and_failed_refresh_create_alerts(tmp_path):
     assert summary["alerts"]["warning"] == 1
 
 
+def test_notification_failure_is_classified_and_alerted(tmp_path):
+    write_json(
+        tmp_path / "notification-status.json",
+        {
+            "schema_version": "1.0",
+            "generated_at": "2026-07-19T00:00:00+00:00",
+            "mode": "apply",
+            "success": False,
+            "minimum_severity": "critical",
+            "cooldown_seconds": 3600,
+            "active_alerts": 2,
+            "eligible_alerts": 2,
+            "pending_alerts": 2,
+            "suppressed_alerts": 0,
+            "dispatched_alerts": 0,
+            "enabled_channels": ["webhook"],
+            "channel_results": [{"type": "webhook", "success": False}],
+            "pending": [],
+        },
+    )
+    store = REPORT_STORE.ReportStore(
+        tmp_path, freshness_seconds={"notification": 10**9}
+    )
+    report = store.list_reports()[0]
+    assert report["category"] == "notification"
+    assert report["summary"]["success"] is False
+    alerts = store.alerts()
+    assert len(alerts) == 1
+    assert alerts[0]["type"] == "notification-failed"
+    assert alerts[0]["severity"] == "critical"
+
+
+def test_notification_state_is_hidden_from_report_index(tmp_path):
+    write_json(tmp_path / ".aiops-notifications" / "state.json", {"sent": {}})
+    assert REPORT_STORE.ReportStore(tmp_path).list_reports() == []
+
+
 def test_compliance_failure_creates_warning(tmp_path):
     write_json(
         tmp_path / "compliance-result.json",
