@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import subprocess
 import sys
@@ -58,6 +57,7 @@ def run_step(
 
 
 def write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
         encoding="utf-8",
@@ -345,7 +345,9 @@ def incident_acceptance(project_root: Path, temporary: Path) -> list[dict[str, A
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--project-root", default=str(Path(__file__).resolve().parents[1]))
+    parser.add_argument(
+        "--project-root", default=str(Path(__file__).resolve().parents[1])
+    )
     parser.add_argument("--output", default="acceptance-result.json")
     parser.add_argument("--skip-pytest", action="store_true")
     args = parser.parse_args()
