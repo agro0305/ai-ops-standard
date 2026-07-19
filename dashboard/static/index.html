@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="sr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI-OPS Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">AI-OPS STANDARD</p>
+      <h1>Operativni pregled</h1>
+      <p class="subtitle">Read-only pregled discovery-ja, AI/MCP inventara, operacija i usklađenosti.</p>
+    </div>
+    <div class="topbar-actions">
+      <span id="connection-state" class="status-pill neutral">Učitavanje</span>
+      <button id="refresh-button" type="button">Osveži</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="kpi-grid" class="kpi-grid" aria-label="Sažetak"></section>
+
+    <section class="panel toolbar">
+      <div>
+        <h2>Izveštaji</h2>
+        <p id="report-root" class="muted"></p>
+      </div>
+      <div class="filters">
+        <label>
+          Tip
+          <select id="category-filter">
+            <option value="all">Svi</option>
+          </select>
+        </label>
+        <label>
+          Pretraga
+          <input id="search-input" type="search" placeholder="Naziv ili plan ID">
+        </label>
+      </div>
+    </section>
+
+    <section class="workspace">
+      <div class="panel report-panel">
+        <div id="report-list" class="report-list" aria-live="polite"></div>
+      </div>
+
+      <aside class="panel detail-panel">
+        <div id="detail-empty" class="empty-state">
+          <h2>Detalji izveštaja</h2>
+          <p>Izaberi izveštaj sa leve strane.</p>
+        </div>
+        <div id="detail-content" hidden>
+          <div class="detail-heading">
+            <div>
+              <p id="detail-category" class="eyebrow"></p>
+              <h2 id="detail-name"></h2>
+            </div>
+            <button id="copy-button" type="button">Kopiraj JSON</button>
+          </div>
+          <div id="detail-summary" class="summary-grid"></div>
+          <pre id="detail-json" tabindex="0"></pre>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <footer>
+    <span>AI-OPS Dashboard · read-only</span>
+    <a href="/healthz">healthz</a>
+    <a href="/readyz">readyz</a>
+    <a href="/api/reports">API</a>
+  </footer>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
