@@ -59,3 +59,36 @@ def test_dashboard_strict_port_fails_when_port_is_occupied():
             raise AssertionError("strict port mode must fail for an occupied port")
     finally:
         occupied_socket.close()
+
+
+def test_dashboard_classifies_common_addresses():
+    assert MODULE.classify_address("127.0.0.1") == "Local"
+    assert MODULE.classify_address("192.168.0.110") == "LAN"
+    assert MODULE.classify_address("10.0.0.5") == "LAN"
+    assert MODULE.classify_address("100.64.10.20") == "Tailscale"
+    assert MODULE.classify_address("8.8.8.8") == "Network"
+    assert MODULE.classify_address("169.254.1.1") is None
+    assert MODULE.classify_address("not-an-ip") is None
+
+
+def test_dashboard_advertises_explicit_host_only():
+    assert MODULE.advertised_urls("192.168.0.110", 8789) == [
+        ("LAN", "http://192.168.0.110:8789")
+    ]
+
+
+def test_dashboard_advertises_discovered_addresses_for_wildcard(monkeypatch):
+    monkeypatch.setattr(
+        MODULE,
+        "discover_ipv4_addresses",
+        lambda: [
+            ("Local", "127.0.0.1"),
+            ("LAN", "192.168.0.110"),
+            ("Tailscale", "100.64.10.20"),
+        ],
+    )
+    assert MODULE.advertised_urls("0.0.0.0", 8789) == [
+        ("Local", "http://127.0.0.1:8789"),
+        ("LAN", "http://192.168.0.110:8789"),
+        ("Tailscale", "http://100.64.10.20:8789"),
+    ]
