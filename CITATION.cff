@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+message: "If you use AI-OPS Standard, please cite this software and its specification."
+title: "AI-OPS Standard"
+type: software
+version: 0.2.0
+date-released: 2026-07-19
+license: Apache-2.0
+authors:
+  - name: "agro0305"
+    alias: "agro0305"
+repository-code: "https://github.com/agro0305/ai-ops-standard"
+url: "https://agro0305.github.io/ai-ops-standard/"
+abstract: >-
+  An open standard and reference implementation for safe, repeatable and
+  auditable AI operations on Linux infrastructure, MCP servers and AI coding
+  agents.
+keywords:
+  - ai operations
+  - devops
+  - linux
+  - safety
+  - audit
+  - mcp
+  - ai agents

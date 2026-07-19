@@ -1,0 +1,29 @@
+{
+  "title": "AI-OPS Standard",
+  "description": "Open standard and reference implementation for safe, repeatable and auditable AI operations on Linux infrastructure, MCP servers and AI coding agents.",
+  "license": "Apache-2.0",
+  "upload_type": "software",
+  "version": "0.2.0",
+  "publication_date": "2026-07-19",
+  "creators": [
+    {
+      "name": "agro0305"
+    }
+  ],
+  "keywords": [
+    "AI operations",
+    "DevOps",
+    "Linux",
+    "AI agents",
+    "MCP",
+    "safety",
+    "auditability"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/agro0305/ai-ops-standard",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    }
+  ]
+}
