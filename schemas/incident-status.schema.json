@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-ops-standard.example/schemas/incident-status.schema.json",
+  "title": "AI-OPS Incident Status Report",
+  "type": "object",
+  "required": ["schema_version", "generated_at", "mode", "success", "summary", "incidents"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "mode": {"enum": ["apply", "dry-run", "read-only"]},
+    "success": {"type": "boolean"},
+    "summary": {
+      "type": "object",
+      "required": ["total", "open", "active", "acknowledged", "silenced", "resolved"],
+      "properties": {
+        "total": {"type": "integer", "minimum": 0},
+        "open": {"type": "integer", "minimum": 0},
+        "active": {"type": "integer", "minimum": 0},
+        "acknowledged": {"type": "integer", "minimum": 0},
+        "silenced": {"type": "integer", "minimum": 0},
+        "resolved": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "incidents": {
+      "type": "array",
+      "items": {"$ref": "incident-state.schema.json#/$defs/incident"}
+    }
+  },
+  "additionalProperties": false
+}
