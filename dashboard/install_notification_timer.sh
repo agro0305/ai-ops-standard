@@ -38,7 +38,7 @@ done
 
 PROJECT_ROOT="$(readlink -f "$PROJECT_ROOT")"
 CONFIG_SOURCE="$(readlink -f "$CONFIG_SOURCE")"
-NOTIFY_SCRIPT="$PROJECT_ROOT/scripts/notify_alerts.py"
+NOTIFY_SCRIPT="$PROJECT_ROOT/scripts/notify_incident_alerts.py"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 TIMER_FILE="/etc/systemd/system/${SERVICE_NAME}.timer"
 TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -64,6 +64,7 @@ echo "  Environment:  $ENV_FILE"
 echo "  Service:      $SERVICE_FILE"
 echo "  Timer:        $TIMER_FILE"
 echo "  Backup:       $BACKUP_DIR"
+echo "  Incidents:    acknowledged, silenced and resolved alerts are suppressed"
 echo "  Immediate run: no"
 echo "  Firewall:     unchanged"
 
@@ -102,8 +103,8 @@ fi
 cat >"$SERVICE_FILE" <<EOF
 [Unit]
 Description=Dispatch AI-OPS deterministic alert notifications
-After=network-online.target aiops-report-refresh.service
-Wants=network-online.target
+Wants=network-online.target aiops-incidents.service
+After=network-online.target aiops-report-refresh.service aiops-incidents.service
 
 [Service]
 Type=oneshot
@@ -134,7 +135,7 @@ cat >"$TIMER_FILE" <<EOF
 Description=Periodically dispatch AI-OPS alert notifications
 
 [Timer]
-OnBootSec=3min
+OnBootSec=5min
 OnUnitActiveSec=$INTERVAL
 RandomizedDelaySec=20s
 Persistent=true
