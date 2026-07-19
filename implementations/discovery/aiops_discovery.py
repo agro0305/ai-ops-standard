@@ -14,12 +14,15 @@ import subprocess
 import sys
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
 VERSION = "0.1.0"
 DEFAULT_TIMEOUT = 8
+DEFAULT_VERSION_TIMEOUT = 5
+DEFAULT_VERSION_WORKERS = 8
 
 SECRET_PATTERNS = [
     re.compile(r"(?i)(authorization:\s*(?:bearer|basic)\s+)[^\s]+"),
@@ -81,8 +84,41 @@ def read_text(path: str, limit: int = 131072) -> str | None:
         return None
 
 
-def versions(commands: dict[str, list[str]]) -> dict[str, Any]:
-    return {name: run(cmd, timeout=5) if command_exists(cmd[0]) else {"available": False} for name, cmd in commands.items()}
+def versions(
+    commands: dict[str, list[str]],
+    *,
+    timeout: int = DEFAULT_VERSION_TIMEOUT,
+    max_workers: int = DEFAULT_VERSION_WORKERS,
+) -> dict[str, Any]:
+    """Probe independent version commands concurrently with bounded latency."""
+    results: dict[str, Any] = {}
+    runnable: dict[str, list[str]] = {}
+    for name, command in commands.items():
+        if command_exists(command[0]):
+            runnable[name] = command
+        else:
+            results[name] = {"available": False}
+
+    if runnable:
+        workers = max(1, min(max_workers, len(runnable)))
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="aiops-discovery") as executor:
+            futures = {
+                executor.submit(run, command, timeout): name
+                for name, command in runnable.items()
+            }
+            for future in as_completed(futures):
+                name = futures[future]
+                try:
+                    results[name] = future.result()
+                except Exception as exc:  # individual probe isolation is intentional
+                    results[name] = {
+                        "command": runnable[name],
+                        "available": True,
+                        "error": type(exc).__name__,
+                        "message": str(exc),
+                    }
+
+    return {name: results[name] for name in commands}
 
 
 def collect_system() -> dict[str, Any]:
