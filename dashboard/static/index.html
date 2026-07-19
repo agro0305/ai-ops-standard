@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AI-OPS Dashboard</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -31,6 +32,17 @@
         <a href="/api/alerts">API</a>
       </div>
       <div id="alert-list" class="alert-list" aria-live="polite"></div>
+    </section>
+
+    <section class="panel audit-panel" aria-label="Audit">
+      <div class="alerts-heading">
+        <div>
+          <h2>Audit događaji</h2>
+          <p class="muted">Najnoviji lokalni događaji iz append-only JSONL zapisa.</p>
+        </div>
+        <a href="/api/audit?limit=50">API</a>
+      </div>
+      <div id="audit-list" class="audit-list" aria-live="polite"></div>
     </section>
 
     <section class="panel toolbar">
@@ -81,6 +93,8 @@
     <span>AI-OPS Dashboard · read-only</span>
     <a href="/healthz">healthz</a>
     <a href="/readyz">readyz</a>
+    <a href="/metrics">metrics</a>
+    <a href="/api/audit?limit=50">audit</a>
     <a href="/api/alerts">alerts</a>
     <a href="/api/reports">API</a>
   </footer>
