@@ -3,31 +3,52 @@ from __future__ import annotations
 
 import argparse
 import errno
+import hmac
 import html
 import ipaddress
 import json
+import os
 import socket
 import subprocess
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 
 class Handler(BaseHTTPRequestHandler):
     data_dir = Path(".")
+    auth_token: str | None = None
 
     def _send_json(self, payload: object, status: int = 200) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _authorized(self) -> bool:
+        return request_is_authorized(self.headers, self.auth_token)
+
+    def _send_unauthorized(self) -> None:
+        body = b"Authentication required."
+        self.send_response(401)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("WWW-Authenticate", 'Bearer realm="AI-OPS Dashboard"')
+        self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
 
     def do_GET(self) -> None:
         if self.path == "/healthz":
             self._send_json({"status": "ok", "data_dir": str(self.data_dir)})
+            return
+
+        if not self._authorized():
+            self._send_unauthorized()
             return
 
         if self.path == "/api/reports":
@@ -45,6 +66,10 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(items)
             return
 
+        if self.path != "/":
+            self._send_json({"error": "not found"}, status=404)
+            return
+
         rows = []
         for path in sorted(self.data_dir.glob("*.json")):
             rows.append(
@@ -56,11 +81,42 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(page)))
+        self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(page)
 
     def log_message(self, fmt: str, *args: object) -> None:
         print(f"{self.client_address[0]} - {fmt % args}", file=sys.stderr)
+
+
+def request_is_authorized(headers: Mapping[str, str], token: str | None) -> bool:
+    """Validate Bearer or X-AI-OPS-Token credentials without leaking values."""
+    if token is None:
+        return True
+
+    authorization = headers.get("Authorization", "")
+    supplied = ""
+    if authorization.startswith("Bearer "):
+        supplied = authorization[7:].strip()
+    if not supplied:
+        supplied = headers.get("X-AI-OPS-Token", "").strip()
+    return bool(supplied) and hmac.compare_digest(supplied, token)
+
+
+def load_auth_token(token_file: str | None) -> str | None:
+    """Load authentication from a file or AIOPS_DASHBOARD_TOKEN."""
+    if token_file:
+        path = Path(token_file).expanduser().resolve()
+        try:
+            token = path.read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            raise ValueError(f"cannot read authentication token file {path}: {exc}") from exc
+        if not token:
+            raise ValueError(f"authentication token file is empty: {path}")
+        return token
+
+    token = os.environ.get("AIOPS_DASHBOARD_TOKEN", "").strip()
+    return token or None
 
 
 def create_server(
@@ -70,10 +126,7 @@ def create_server(
     strict_port: bool = False,
     max_port_attempts: int = 100,
 ) -> tuple[ThreadingHTTPServer, int]:
-    """Bind the requested port or the next available port.
-
-    The server object itself performs the bind, avoiding a check-then-bind race.
-    """
+    """Bind the requested port or the next available port without a race."""
     if not 0 <= requested_port <= 65535:
         raise ValueError("port must be between 0 and 65535")
 
@@ -118,20 +171,10 @@ def classify_address(address: str) -> str | None:
 
 
 def is_virtual_interface(name: str) -> bool:
-    """Identify common container and local virtual bridge interfaces."""
     lowered = name.lower()
     prefixes = (
-        "docker",
-        "br-",
-        "veth",
-        "virbr",
-        "cni",
-        "flannel",
-        "cali",
-        "tunl",
-        "kube-ipvs",
-        "podman",
-        "lxcbr",
+        "docker", "br-", "veth", "virbr", "cni", "flannel", "cali",
+        "tunl", "kube-ipvs", "podman", "lxcbr",
     )
     return lowered.startswith(prefixes)
 
@@ -139,15 +182,11 @@ def is_virtual_interface(name: str) -> bool:
 def _run_ip_json(arguments: list[str]) -> list[dict[str, Any]]:
     try:
         result = subprocess.run(
-            ["ip", "-j", *arguments],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=3,
+            ["ip", "-j", *arguments], check=False, capture_output=True,
+            text=True, timeout=3,
         )
     except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
         return []
-
     if result.returncode != 0:
         return []
     try:
@@ -167,13 +206,7 @@ def discover_default_interfaces() -> set[str]:
 
 
 def discover_ipv4_addresses() -> list[tuple[str, str]]:
-    """Discover browser-relevant IPv4 addresses.
-
-    Always includes 127.0.0.1, includes addresses on interfaces carrying a
-    default route, and includes Tailscale addresses. Container bridges and
-    virtual Ethernet interfaces are excluded unless they carry the default
-    route.
-    """
+    """Discover browser-relevant Local, LAN and Tailscale addresses."""
     addresses: set[tuple[str, str]] = {("Local", "127.0.0.1")}
     default_interfaces = discover_default_interfaces()
     found_non_loopback = False
@@ -182,18 +215,12 @@ def discover_ipv4_addresses() -> list[tuple[str, str]]:
         interface_name = str(interface.get("ifname") or "")
         if not interface_name or interface_name == "lo":
             continue
-
         is_default = interface_name in default_interfaces
         is_tailscale = interface_name.lower().startswith("tailscale")
         if not is_default and not is_tailscale and is_virtual_interface(interface_name):
             continue
-
-        # When a default route is known, suppress unrelated non-virtual
-        # interfaces as well. This keeps the output limited to usable entry
-        # points while still allowing Tailscale.
         if default_interfaces and not is_default and not is_tailscale:
             continue
-
         for item in interface.get("addr_info", []):
             if item.get("family") != "inet" or not item.get("local"):
                 continue
@@ -203,8 +230,6 @@ def discover_ipv4_addresses() -> list[tuple[str, str]]:
                 addresses.add((label, address))
                 found_non_loopback = True
 
-    # Minimal fallback for systems without the ip command or without a default
-    # route. Loopback aliases such as 127.0.1.1 are deliberately ignored.
     if not found_non_loopback:
         try:
             for item in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
@@ -216,22 +241,14 @@ def discover_ipv4_addresses() -> list[tuple[str, str]]:
             pass
 
     priority = {"Local": 0, "LAN": 1, "Tailscale": 2, "Network": 3}
-    return sorted(
-        addresses,
-        key=lambda item: (priority[item[0]], ipaddress.ip_address(item[1])),
-    )
+    return sorted(addresses, key=lambda item: (priority[item[0]], ipaddress.ip_address(item[1])))
 
 
 def advertised_urls(bind_host: str, port: int) -> list[tuple[str, str]]:
-    """Build addresses that users can actually open in a browser."""
     if bind_host not in {"0.0.0.0", "::", ""}:
         label = classify_address(bind_host) or "Dashboard"
         return [(label, f"http://{bind_host}:{port}")]
-
-    return [
-        (label, f"http://{address}:{port}")
-        for label, address in discover_ipv4_addresses()
-    ]
+    return [(label, f"http://{address}:{port}") for label, address in discover_ipv4_addresses()]
 
 
 def main() -> int:
@@ -239,17 +256,9 @@ def main() -> int:
     parser.add_argument("--data-dir", default=".")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8787)
-    parser.add_argument(
-        "--strict-port",
-        action="store_true",
-        help="Fail instead of selecting the next available port.",
-    )
-    parser.add_argument(
-        "--max-port-attempts",
-        type=int,
-        default=100,
-        help="Maximum number of following ports to try when the requested port is occupied.",
-    )
+    parser.add_argument("--auth-token-file")
+    parser.add_argument("--strict-port", action="store_true", help="Fail instead of selecting the next available port.")
+    parser.add_argument("--max-port-attempts", type=int, default=100)
     args = parser.parse_args()
 
     data_dir = Path(args.data_dir).resolve()
@@ -258,13 +267,15 @@ def main() -> int:
     if args.max_port_attempts < 0:
         parser.error("--max-port-attempts must be zero or greater")
 
+    try:
+        Handler.auth_token = load_auth_token(args.auth_token_file)
+    except ValueError as exc:
+        parser.error(str(exc))
     Handler.data_dir = data_dir
 
     try:
         server, selected_port = create_server(
-            args.host,
-            args.port,
-            strict_port=args.strict_port,
+            args.host, args.port, strict_port=args.strict_port,
             max_port_attempts=args.max_port_attempts,
         )
     except (OSError, ValueError) as exc:
@@ -272,16 +283,16 @@ def main() -> int:
         return 1
 
     if selected_port != args.port and args.port != 0:
-        print(
-            f"Port {args.port} is occupied or unavailable; using port {selected_port} instead.",
-            file=sys.stderr,
-        )
+        print(f"Port {args.port} is occupied or unavailable; using port {selected_port} instead.", file=sys.stderr)
 
     print(f"Listening on {args.host}:{selected_port}")
     for label, url in advertised_urls(args.host, selected_port):
         print(f"{label}: {url}")
-    if args.host in {"0.0.0.0", "::", ""}:
+    print(f"Authentication: {'enabled' if Handler.auth_token else 'disabled'}")
+    if args.host in {"0.0.0.0", "::", ""} and not Handler.auth_token:
         print("Warning: dashboard is exposed on all interfaces and has no authentication.")
+    elif args.host in {"0.0.0.0", "::", ""}:
+        print("Warning: Bearer authentication is enabled, but HTTP traffic is not encrypted.")
 
     try:
         server.serve_forever()
