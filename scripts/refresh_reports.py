@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,8 @@ REPORT_NAMES = (
     "ai-capability-registry.json",
     "compliance-result.json",
 )
+AUDIT_RELATIVE_PATH = Path(".aiops-audit/events.jsonl")
+MAX_AUDIT_BYTES = 5 * 1024 * 1024
 
 
 def now() -> str:
@@ -41,6 +44,22 @@ def write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
     finally:
         if temporary.exists():
             temporary.unlink()
+
+
+def append_audit_event(path: Path, event: dict[str, Any]) -> None:
+    """Append one fsynced JSONL audit event with simple size rotation."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists() and path.stat().st_size >= MAX_AUDIT_BYTES:
+        rotated = path.with_suffix(path.suffix + ".1")
+        if rotated.exists():
+            rotated.unlink()
+        os.replace(path, rotated)
+    line = json.dumps(event, sort_keys=True, ensure_ascii=False) + "\n"
+    with path.open("a", encoding="utf-8") as stream:
+        stream.write(line)
+        stream.flush()
+        os.fsync(stream.fileno())
+    path.chmod(0o640)
 
 
 def validate_json(path: Path) -> None:
@@ -67,6 +86,41 @@ def run_step(name: str, argv: list[str], accepted_codes: set[int]) -> dict[str, 
         "stdout": result.stdout[-4000:],
         "stderr": result.stderr[-4000:],
     }
+
+
+def audit_from_status(status: dict[str, Any]) -> dict[str, Any]:
+    steps = status.get("steps", [])
+    failed_steps = [
+        str(step.get("name", "unknown"))
+        for step in steps
+        if isinstance(step, dict) and step.get("accepted") is False
+    ]
+    return {
+        "event_id": str(uuid.uuid4()),
+        "event_type": "report-refresh",
+        "occurred_at": status.get("generated_at") or now(),
+        "success": bool(status.get("success")),
+        "duration_seconds": status.get("duration_seconds"),
+        "project_root": status.get("project_root"),
+        "output_dir": status.get("output_dir"),
+        "reports": status.get("reports", []),
+        "failed_steps": failed_steps,
+        "error": status.get("error"),
+    }
+
+
+def write_status_and_audit(output_dir: Path, status: dict[str, Any]) -> None:
+    audit_path = output_dir / AUDIT_RELATIVE_PATH
+    try:
+        append_audit_event(audit_path, audit_from_status(status))
+        status["audit"] = {"written": True, "path": str(audit_path)}
+    except OSError as exc:
+        status["audit"] = {
+            "written": False,
+            "path": str(audit_path),
+            "error": str(exc),
+        }
+    write_json_atomic(output_dir / "refresh-status.json", status)
 
 
 def run_refresh(
@@ -153,7 +207,7 @@ def run_refresh(
                 destination.chmod(0o640)
 
     status = {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "generated_at": now(),
         "started_at": started_at,
         "success": success,
@@ -163,7 +217,7 @@ def run_refresh(
         "reports": list(REPORT_NAMES) if success else [],
         "steps": steps,
     }
-    write_json_atomic(output_dir / "refresh-status.json", status)
+    write_status_and_audit(output_dir, status)
     return (0 if success else 2), status
 
 
@@ -198,14 +252,16 @@ def main() -> int:
             code, status = run_refresh(project_root, output_dir)
         except (OSError, ValueError, subprocess.SubprocessError) as exc:
             status = {
-                "schema_version": "1.0",
+                "schema_version": "1.1",
                 "generated_at": now(),
                 "success": False,
                 "project_root": str(project_root),
                 "output_dir": str(output_dir),
+                "reports": [],
+                "steps": [],
                 "error": str(exc),
             }
-            write_json_atomic(output_dir / "refresh-status.json", status)
+            write_status_and_audit(output_dir, status)
             print(f"Refresh failed: {exc}", file=sys.stderr)
             return 2
 
