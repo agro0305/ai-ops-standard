@@ -33,6 +33,7 @@ jobs:
         run: |
           bash -n dashboard/install_systemd.sh
           bash -n dashboard/install_refresh_timer.sh
+          bash -n dashboard/install_retention_timer.sh
 
       - name: Run compliance tests
         run: python -m pytest -q compliance/tests
@@ -64,3 +65,12 @@ jobs:
             --project-root . \
             --output-dir /tmp/aiops-reports
           python -m json.tool /tmp/aiops-reports/refresh-status.json >/dev/null
+
+      - name: Smoke-test retention dry-run
+        run: |
+          python scripts/retention.py \
+            --root /tmp/aiops-reports \
+            --backup-days 30 \
+            --audit-days 90 \
+            --output /tmp/retention-plan.json
+          python -m json.tool /tmp/retention-plan.json >/dev/null
