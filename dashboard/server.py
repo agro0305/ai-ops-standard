@@ -14,12 +14,13 @@ import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Mapping
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 DASHBOARD_DIR = Path(__file__).resolve().parent
 if str(DASHBOARD_DIR) not in sys.path:
     sys.path.insert(0, str(DASHBOARD_DIR))
 
+from observability import read_audit_events, render_prometheus_metrics  # noqa: E402
 from report_store import ReportStore  # noqa: E402
 
 
@@ -83,6 +84,7 @@ class Handler(BaseHTTPRequestHandler):
             "index.html": "text/html; charset=utf-8",
             "app.js": "application/javascript; charset=utf-8",
             "style.css": "text/css; charset=utf-8",
+            "favicon.svg": "image/svg+xml",
         }
         content_type = allowed.get(filename)
         if content_type is None:
@@ -98,7 +100,8 @@ class Handler(BaseHTTPRequestHandler):
         self._send_bytes(body, content_type)
 
     def do_GET(self) -> None:
-        path = urlsplit(self.path).path
+        parsed = urlsplit(self.path)
+        path = parsed.path
 
         if path == "/healthz":
             self._send_json({"status": "ok"})
@@ -119,11 +122,19 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/":
             self._serve_static("index.html")
             return
+        if path in {"/favicon.ico", "/static/favicon.svg"}:
+            self._serve_static("favicon.svg")
+            return
         if path == "/static/app.js":
             self._serve_static("app.js")
             return
         if path == "/static/style.css":
             self._serve_static("style.css")
+            return
+
+        if path == "/metrics":
+            body = render_prometheus_metrics(self.store).encode("utf-8")
+            self._send_bytes(body, "text/plain; version=0.0.4; charset=utf-8")
             return
 
         if path == "/api/summary":
@@ -132,6 +143,17 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/api/alerts":
             self._send_json(self.store.alerts())
+            return
+
+        if path == "/api/audit":
+            query = parse_qs(parsed.query)
+            try:
+                limit = int(query.get("limit", ["50"])[0])
+                payload = read_audit_events(self.data_dir, limit=limit)
+            except (TypeError, ValueError) as exc:
+                self._send_json({"error": str(exc)}, status=400)
+                return
+            self._send_json(payload)
             return
 
         if path == "/api/reports":
