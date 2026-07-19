@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import importlib.util
 import socket
 from pathlib import Path
@@ -107,6 +108,24 @@ def test_dashboard_accepts_bearer_and_custom_header_tokens():
     )
     assert MODULE.request_is_authorized(
         {"X-AI-OPS-Token": "correct-secret"}, token
+    )
+
+
+def test_dashboard_accepts_browser_basic_authentication():
+    encoded = base64.b64encode(b"aiops:correct-secret").decode("ascii")
+    assert MODULE.request_is_authorized(
+        {"Authorization": f"Basic {encoded}"}, "correct-secret"
+    )
+
+
+def test_dashboard_rejects_wrong_basic_username_or_password():
+    wrong_user = base64.b64encode(b"admin:correct-secret").decode("ascii")
+    wrong_password = base64.b64encode(b"aiops:wrong-secret").decode("ascii")
+    assert not MODULE.request_is_authorized(
+        {"Authorization": f"Basic {wrong_user}"}, "correct-secret"
+    )
+    assert not MODULE.request_is_authorized(
+        {"Authorization": f"Basic {wrong_password}"}, "correct-secret"
     )
 
 
