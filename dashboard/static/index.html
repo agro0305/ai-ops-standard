@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="sr">
+<html lang="sr" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -9,108 +9,159 @@
 </head>
 <body>
   <header class="topbar">
-    <div>
-      <p class="eyebrow">AI-OPS STANDARD</p>
-      <h1>Operativni pregled</h1>
-      <p class="subtitle">Read-only pregled discovery-ja, AI/MCP inventara, incidenata, operacija i usklađenosti.</p>
+    <div class="brand-block">
+      <div class="brand-mark" aria-hidden="true">AO</div>
+      <div>
+        <p class="eyebrow">AI-OPS STANDARD</p>
+        <h1>Operativni pregled</h1>
+      </div>
     </div>
     <div class="topbar-actions">
       <span id="connection-state" class="status-pill neutral">Učitavanje</span>
+      <button id="theme-button" class="icon-button" type="button" aria-label="Promeni temu" title="Promeni temu">☀</button>
       <button id="refresh-button" type="button">Osveži</button>
     </div>
   </header>
 
-  <main>
+  <main class="dashboard-shell">
     <section id="kpi-grid" class="kpi-grid" aria-label="Sažetak"></section>
 
-    <section id="alerts-panel" class="panel alerts-panel" aria-label="Upozorenja">
-      <div class="alerts-heading">
-        <div>
-          <h2>Upozorenja</h2>
-          <p class="muted">Freshness, refresh, compliance i operativne greške.</p>
-        </div>
-        <a href="/api/alerts">API</a>
-      </div>
-      <div id="alert-list" class="alert-list" aria-live="polite"></div>
-    </section>
-
-    <section class="panel incidents-panel" aria-label="Incidenti">
-      <div class="alerts-heading">
-        <div>
-          <h2>Incident lifecycle</h2>
-          <p class="muted">Read-only stanje: active, acknowledged, silenced i resolved.</p>
-        </div>
-        <a href="/api/reports/incident-status.json">JSON</a>
-      </div>
-      <div id="incident-summary" class="incident-summary"></div>
-      <div id="incident-list" class="incident-list" aria-live="polite"></div>
-    </section>
-
-    <section class="panel audit-panel" aria-label="Audit">
-      <div class="alerts-heading">
-        <div>
-          <h2>Audit događaji</h2>
-          <p class="muted">Najnoviji lokalni događaji iz append-only JSONL zapisa.</p>
-        </div>
-        <a href="/api/audit?limit=50">API</a>
-      </div>
-      <div id="audit-list" class="audit-list" aria-live="polite"></div>
-    </section>
-
-    <section class="panel toolbar">
-      <div>
-        <h2>Izveštaji</h2>
-        <p id="report-root" class="muted"></p>
-      </div>
-      <div class="filters">
-        <label>
-          Tip
-          <select id="category-filter">
-            <option value="all">Svi</option>
-          </select>
-        </label>
-        <label>
-          Pretraga
-          <input id="search-input" type="search" placeholder="Naziv ili plan ID">
-        </label>
-      </div>
-    </section>
-
-    <section class="workspace">
-      <div class="panel report-panel">
-        <div id="report-list" class="report-list" aria-live="polite"></div>
-      </div>
-
-      <aside class="panel detail-panel">
-        <div id="detail-empty" class="empty-state">
-          <h2>Detalji izveštaja</h2>
-          <p>Izaberi izveštaj sa leve strane.</p>
-        </div>
-        <div id="detail-content" hidden>
-          <div class="detail-heading">
-            <div>
-              <p id="detail-category" class="eyebrow"></p>
-              <h2 id="detail-name"></h2>
-            </div>
-            <button id="copy-button" type="button">Kopiraj JSON</button>
+    <section class="dashboard-grid" aria-label="AI-OPS radni prostor">
+      <section class="panel operations-panel" aria-label="Operativno stanje">
+        <div class="panel-heading compact-heading">
+          <div>
+            <p class="eyebrow">OPERATIVNO STANJE</p>
+            <h2>Alarmi i incidenti</h2>
           </div>
-          <div id="detail-summary" class="summary-grid"></div>
-          <pre id="detail-json" tabindex="0"></pre>
+          <div class="tab-strip" role="tablist" aria-label="Operativno stanje">
+            <button class="tab-button active" type="button" data-tab-group="operations" data-tab-target="alerts-view" role="tab" aria-selected="true">Upozorenja</button>
+            <button class="tab-button" type="button" data-tab-group="operations" data-tab-target="incidents-view" role="tab" aria-selected="false">Incidenti</button>
+          </div>
         </div>
-      </aside>
+
+        <div id="alerts-view" class="tab-panel panel-scroll active" data-tab-panel="operations">
+          <section id="alerts-panel" class="embedded-panel alerts-panel" aria-label="Upozorenja">
+            <div id="alert-list" class="alert-list" aria-live="polite"></div>
+          </section>
+        </div>
+
+        <div id="incidents-view" class="tab-panel panel-scroll" data-tab-panel="operations" hidden>
+          <section class="embedded-panel incidents-panel" aria-label="Incidenti">
+            <div id="incident-summary" class="incident-summary"></div>
+            <div id="incident-list" class="incident-list" aria-live="polite"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="panel reports-panel" aria-label="Izveštaji">
+        <div class="panel-heading reports-heading">
+          <div>
+            <p class="eyebrow">IZVEŠTAJI</p>
+            <h2>Discovery i operacije</h2>
+          </div>
+          <div class="filters">
+            <label>
+              <span>Tip</span>
+              <select id="category-filter">
+                <option value="all">Svi</option>
+              </select>
+            </label>
+            <label class="search-field">
+              <span>Pretraga</span>
+              <input id="search-input" type="search" placeholder="Naziv ili plan ID">
+            </label>
+          </div>
+        </div>
+        <p id="report-root" class="report-root muted"></p>
+        <div class="report-panel panel-scroll">
+          <div id="report-list" class="report-list" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <section class="panel detail-workspace" aria-label="Detalji i audit">
+        <div class="panel-heading compact-heading">
+          <div>
+            <p class="eyebrow">DETALJI</p>
+            <h2>Izabrani zapis</h2>
+          </div>
+          <div class="tab-strip" role="tablist" aria-label="Detalji i audit">
+            <button class="tab-button active" type="button" data-tab-group="details" data-tab-target="detail-view" role="tab" aria-selected="true">Detalji</button>
+            <button class="tab-button" type="button" data-tab-group="details" data-tab-target="audit-view" role="tab" aria-selected="false">Audit</button>
+          </div>
+        </div>
+
+        <div id="detail-view" class="tab-panel detail-panel panel-scroll active" data-tab-panel="details">
+          <div id="detail-empty" class="empty-state">
+            <h2>Detalji izveštaja</h2>
+            <p>Izaberi izveštaj iz srednje kolone.</p>
+          </div>
+          <div id="detail-content" hidden>
+            <div class="detail-heading">
+              <div>
+                <p id="detail-category" class="eyebrow"></p>
+                <h2 id="detail-name"></h2>
+              </div>
+              <button id="copy-button" type="button">Kopiraj JSON</button>
+            </div>
+            <div id="detail-summary" class="summary-grid"></div>
+            <pre id="detail-json" tabindex="0"></pre>
+          </div>
+        </div>
+
+        <div id="audit-view" class="tab-panel panel-scroll" data-tab-panel="details" hidden>
+          <section class="embedded-panel audit-panel" aria-label="Audit">
+            <div id="audit-list" class="audit-list" aria-live="polite"></div>
+          </section>
+        </div>
+      </section>
     </section>
   </main>
 
-  <footer>
+  <footer class="statusbar">
     <span>AI-OPS Dashboard · read-only</span>
-    <a href="/healthz">healthz</a>
-    <a href="/readyz">readyz</a>
-    <a href="/metrics">metrics</a>
-    <a href="/api/audit?limit=50">audit</a>
-    <a href="/api/alerts">alerts</a>
-    <a href="/api/reports">API</a>
+    <span class="statusbar-links">
+      <a href="/healthz">healthz</a>
+      <a href="/readyz">readyz</a>
+      <a href="/metrics">metrics</a>
+      <a href="/api/alerts">alerts</a>
+      <a href="/api/reports">API</a>
+    </span>
   </footer>
 
   <script src="/static/app.js" defer></script>
+  <script>
+    (() => {
+      const root = document.documentElement;
+      const themeButton = document.querySelector("#theme-button");
+      const preferred = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+      const initial = localStorage.getItem("aiops-theme") || preferred;
+
+      function setTheme(theme) {
+        root.dataset.theme = theme;
+        localStorage.setItem("aiops-theme", theme);
+        themeButton.textContent = theme === "dark" ? "☀" : "☾";
+        themeButton.setAttribute("aria-label", theme === "dark" ? "Uključi svetlu temu" : "Uključi tamnu temu");
+      }
+
+      setTheme(initial);
+      themeButton.addEventListener("click", () => setTheme(root.dataset.theme === "dark" ? "light" : "dark"));
+
+      for (const button of document.querySelectorAll("[data-tab-target]")) {
+        button.addEventListener("click", () => {
+          const group = button.dataset.tabGroup;
+          for (const peer of document.querySelectorAll(`[data-tab-group="${group}"]`)) {
+            const active = peer === button;
+            peer.classList.toggle("active", active);
+            peer.setAttribute("aria-selected", active ? "true" : "false");
+          }
+          for (const panel of document.querySelectorAll(`[data-tab-panel="${group}"]`)) {
+            const active = panel.id === button.dataset.tabTarget;
+            panel.classList.toggle("active", active);
+            panel.hidden = !active;
+          }
+        });
+      }
+    })();
+  </script>
 </body>
 </html>
