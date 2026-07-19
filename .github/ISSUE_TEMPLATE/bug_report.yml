@@ -1,0 +1,73 @@
+name: Bug report
+description: Report a reproducible defect in the standard, implementation, dashboard or tooling
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include credentials, private hostnames, production data or exploitable security details. Use private vulnerability reporting for security issues.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: AI-OPS version or commit SHA
+      placeholder: 0.2.0
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Specification
+        - Discovery
+        - Operations / backup / rollback
+        - Compliance suite
+        - Dashboard
+        - Incidents / notifications
+        - Systemd installers
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system, Python version and relevant runtime details
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Minimal, sanitized and non-destructive reproduction
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized logs or reports
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: I removed credentials, private infrastructure details and production data.
+          required: true
+        - label: This is not a vulnerability requiring private reporting.
+          required: true
