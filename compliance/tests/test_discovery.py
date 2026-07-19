@@ -36,7 +36,7 @@ def test_versions_probes_independent_commands_concurrently(monkeypatch):
     lock = threading.Lock()
     state = {"active": 0, "peak": 0}
 
-    monkeypatch.setattr(module, "command_exists", lambda _command: True)
+    monkeypatch.setattr(module, "resolve_command", lambda command: command)
 
     def fake_run(command, timeout=module.DEFAULT_VERSION_TIMEOUT):
         with lock:
@@ -54,6 +54,7 @@ def test_versions_probes_independent_commands_concurrently(monkeypatch):
     assert state["peak"] > 1
     assert list(results) == list(commands)
     assert all(item["return_code"] == 0 for item in results.values())
+    assert all(item["resolved_path"] == "tool" for item in results.values())
 
 
 def test_cli_lists_collectors():
