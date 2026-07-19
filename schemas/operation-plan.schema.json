@@ -3,11 +3,27 @@
   "$id": "https://ai-ops-standard.org/schemas/operation-plan.schema.json",
   "title": "AI-OPS Operation Plan",
   "type": "object",
-  "required": ["schema_version", "plan_id", "created_at", "intent", "risk", "actions", "backup", "verification", "rollback", "status"],
+  "required": [
+    "schema_version", "plan_id", "created_at", "tool", "intent",
+    "risk", "preconditions", "actions", "backup", "verification",
+    "rollback", "status"
+  ],
   "properties": {
-    "schema_version": {"type": "string"},
-    "plan_id": {"type": "string", "minLength": 1},
+    "schema_version": {"const": "1.1"},
+    "plan_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
     "created_at": {"type": "string", "format": "date-time"},
+    "tool": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": {"const": "aiops_operations"},
+        "version": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
     "intent": {"type": "string"},
     "discovery_report": {"type": "string"},
     "discovery_host": {"type": "object"},
@@ -18,40 +34,103 @@
         "level": {"enum": ["low", "medium", "high", "critical"]},
         "approval_required": {"type": "boolean"}
       },
-      "additionalProperties": true
+      "additionalProperties": false
     },
-    "preconditions": {"type": "array", "items": {"type": "string"}},
+    "preconditions": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/checkOrManual"}
+    },
     "actions": {
       "type": "array",
       "minItems": 1,
-      "items": {
-        "type": "object",
-        "required": ["type"],
-        "properties": {
-          "type": {"enum": ["mkdir", "write_file", "copy_file", "delete", "command"]},
-          "path": {"type": "string"},
-          "source": {"type": "string"},
-          "content": {"type": "string"},
-          "argv": {"type": "array", "items": {"type": "string"}, "minItems": 1},
-          "timeout": {"type": "integer", "minimum": 1},
-          "service_restart": {"type": "boolean"},
-          "production": {"type": "boolean"},
-          "safety_critical": {"type": "boolean"}
-        },
-        "additionalProperties": true
-      }
+      "items": {"$ref": "#/$defs/action"}
     },
     "backup": {
       "type": "object",
       "required": ["required", "targets"],
       "properties": {
         "required": {"type": "boolean"},
-        "targets": {"type": "array", "items": {"type": "string"}}
-      }
+        "targets": {
+          "type": "array",
+          "items": {"type": "string"},
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
     },
-    "verification": {"type": "array", "items": {"type": "object"}},
-    "rollback": {"type": "object"},
+    "verification": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/check"}
+    },
+    "rollback": {
+      "type": "object",
+      "required": ["strategy", "targets", "command_rollback_required"],
+      "properties": {
+        "strategy": {"const": "restore-verified-backup-and-command-rollback"},
+        "targets": {
+          "type": "array",
+          "items": {"type": "string"},
+          "uniqueItems": true
+        },
+        "command_rollback_required": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
     "status": {"enum": ["ready", "awaiting-approval"]}
   },
-  "additionalProperties": true
+  "additionalProperties": false,
+  "$defs": {
+    "argv": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "checkOrManual": {
+      "oneOf": [
+        {"type": "string", "minLength": 1},
+        {"$ref": "#/$defs/check"}
+      ]
+    },
+    "check": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "enum": ["exists", "not_exists", "writable", "file_contains", "sha256", "command"]
+        },
+        "path": {"type": "string"},
+        "text": {"type": "string"},
+        "expected": {"type": "string"},
+        "argv": {"$ref": "#/$defs/argv"},
+        "timeout": {"type": "integer", "minimum": 1, "maximum": 3600},
+        "expected_returncode": {"type": "integer"}
+      },
+      "additionalProperties": true
+    },
+    "action": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {"enum": ["mkdir", "write_file", "copy_file", "delete", "command"]},
+        "path": {"type": "string"},
+        "source": {"type": "string"},
+        "content": {"type": "string"},
+        "content_from": {"type": "string"},
+        "replace_symlink": {"type": "boolean"},
+        "argv": {"$ref": "#/$defs/argv"},
+        "rollback_argv": {"$ref": "#/$defs/argv"},
+        "backup_targets": {
+          "type": "array",
+          "items": {"type": "string"},
+          "uniqueItems": true
+        },
+        "timeout": {"type": "integer", "minimum": 1, "maximum": 3600},
+        "rollback_timeout": {"type": "integer", "minimum": 1, "maximum": 3600},
+        "service_restart": {"type": "boolean"},
+        "production": {"type": "boolean"},
+        "safety_critical": {"type": "boolean"}
+      },
+      "additionalProperties": true
+    }
+  }
 }
