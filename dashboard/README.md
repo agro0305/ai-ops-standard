@@ -11,7 +11,7 @@ The current server indexes JSON reports and provides:
 - `/healthz` — minimal unauthenticated health response;
 - automatic free-port selection for foreground use;
 - Local, LAN and Tailscale URL discovery;
-- optional Bearer-token authentication;
+- optional Basic, Bearer and header-token authentication;
 - a safe systemd installer.
 
 ## Foreground use
@@ -42,7 +42,14 @@ The server checks the requested port and automatically chooses the next free por
 
 ## Authentication
 
-Protected endpoints accept either:
+When opening the dashboard in a browser, use:
+
+```text
+Username: aiops
+Password: contents of the token file
+```
+
+API clients may use:
 
 ```text
 Authorization: Bearer <token>
@@ -63,7 +70,7 @@ curl -H "Authorization: Bearer $(cat ~/.aiops-dashboard.token)" \
   http://127.0.0.1:8789/api/reports
 ```
 
-Bearer tokens over plain HTTP are not encrypted. For access outside a trusted LAN, use Tailscale or a reverse proxy with TLS.
+Basic and Bearer credentials over plain HTTP are not encrypted. For access outside a trusted LAN, use Tailscale or a reverse proxy with TLS.
 
 ## systemd installation
 
