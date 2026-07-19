@@ -1,8 +1,19 @@
 # AI-OPS Standard
 
+[![Validate](https://github.com/agro0305/ai-ops-standard/actions/workflows/validate.yml/badge.svg)](https://github.com/agro0305/ai-ops-standard/actions/workflows/validate.yml)
+[![Documentation](https://github.com/agro0305/ai-ops-standard/actions/workflows/pages.yml/badge.svg)](https://github.com/agro0305/ai-ops-standard/actions/workflows/pages.yml)
+[![Version](https://img.shields.io/badge/version-0.2.0-brightgreen.svg)](docs/releases/0.2.0.md)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
 Open standard and reference implementation for safe, repeatable and auditable AI operations on Linux infrastructure, MCP servers and AI coding agents.
 
 AI-OPS defines how an agent discovers current state, plans a minimal change, obtains approval, creates and verifies backups, executes, verifies the result, rolls back safely, manages incidents and produces an audit trail.
+
+- **Documentation:** https://agro0305.github.io/ai-ops-standard/
+- **Release notes:** [Version 0.2.0](docs/releases/0.2.0.md)
+- **Contributing:** [CONTRIBUTING.md](CONTRIBUTING.md)
+- **Security:** [SECURITY.md](SECURITY.md)
+- **Citation:** [CITATION.cff](CITATION.cff)
 
 ## Project status
 
@@ -129,6 +140,14 @@ English documents are canonical. Serbian translations use the `.sr.md` suffix.
 - `templates/` — reports and plans;
 - `skills/` — instructions for AI agents;
 - `rfcs/` — proposals before standardization.
+
+## Community
+
+- Contributions: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Support: [SUPPORT.md](SUPPORT.md)
+- Governance: [GOVERNANCE.md](GOVERNANCE.md)
+- Code of Conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- Security reports: [SECURITY.md](SECURITY.md)
 
 ## Scope
 
