@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-ops-standard.example/schemas/incident-state.schema.json",
+  "title": "AI-OPS Incident State",
+  "type": "object",
+  "required": ["schema_version", "updated_at", "incidents"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "updated_at": {"type": ["string", "null"], "format": "date-time"},
+    "incidents": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/incident"}
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "nullableDate": {"type": ["string", "null"], "format": "date-time"},
+    "nullableString": {"type": ["string", "null"]},
+    "incident": {
+      "type": "object",
+      "required": [
+        "incident_id", "alert_id", "alert_type", "severity", "report",
+        "category", "message", "status", "first_seen_at", "last_seen_at",
+        "occurrence_count"
+      ],
+      "properties": {
+        "incident_id": {"type": "string", "pattern": "^inc-[a-f0-9]{16}$"},
+        "alert_id": {"type": "string", "minLength": 1},
+        "alert_type": {"type": "string"},
+        "severity": {"enum": ["info", "warning", "critical"]},
+        "report": {"type": "string"},
+        "category": {"type": "string"},
+        "message": {"type": "string"},
+        "status": {"enum": ["active", "acknowledged", "silenced", "resolved"]},
+        "first_seen_at": {"type": "string", "format": "date-time"},
+        "last_seen_at": {"type": "string", "format": "date-time"},
+        "occurrence_count": {"type": "integer", "minimum": 1},
+        "acknowledged_at": {"$ref": "#/$defs/nullableDate"},
+        "acknowledged_by": {"$ref": "#/$defs/nullableString"},
+        "acknowledge_note": {"$ref": "#/$defs/nullableString"},
+        "silenced_at": {"$ref": "#/$defs/nullableDate"},
+        "silenced_until": {"$ref": "#/$defs/nullableDate"},
+        "silenced_by": {"$ref": "#/$defs/nullableString"},
+        "silence_note": {"$ref": "#/$defs/nullableString"},
+        "pre_silence_status": {"type": ["string", "null"]},
+        "resolved_at": {"$ref": "#/$defs/nullableDate"},
+        "resolved_by": {"$ref": "#/$defs/nullableString"},
+        "resolution_note": {"$ref": "#/$defs/nullableString"},
+        "resolution_reason": {"type": ["string", "null"]}
+      },
+      "additionalProperties": true
+    }
+  }
+}
