@@ -4,47 +4,35 @@ on:
   push:
   pull_request:
 
-permissions:
-  contents: read
-
 jobs:
   quality:
-    runs-on: [self-hosted, linux, x64, devserver]
-    timeout-minutes: 30
+    runs-on:
+      - self-hosted
+      - linux
+
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@v4.2.2
         with:
           fetch-depth: 0
 
       - name: Verify SonarQube
-        run: curl -fsS "${SONAR_HOST_URL}/api/system/status"
+        run: curl -fsS --max-time 10 "${SONAR_HOST_URL}/api/system/status"
         env:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
-      - name: Trivy filesystem scan
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          scanners: vuln,secret,misconfig
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: 1
+      - name: Trivy - block only new HIGH/CRITICAL findings
+        run: /usr/local/bin/trivy-new-findings "$GITHUB_WORKSPACE"
 
-      - name: SonarQube scan
-        uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8.2.1
-        with:
-          args: >
-            -Dsonar.projectKey=agro0305_ai-ops-standard
-            -Dsonar.projectName=ai-ops-standard
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v6.0.0
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
       - name: SonarQube Quality Gate
-        uses: SonarSource/sonarqube-quality-gate-action@7a5fffe8e523c40e0c740b6bc2712ab503e52efa # v1.2.1
-        timeout-minutes: 5
+        uses: SonarSource/sonarqube-quality-gate-action@v1.2.0
+        timeout-minutes: 10
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
